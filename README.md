@@ -16,24 +16,6 @@ BeanLink connects smallholder bean farmers in Kenya to farm inputs, data-driven 
 - **Order & transaction management** — tracked status across the full lifecycle: pending → confirmed → processing → completed/cancelled.
 - **Role-based access** — Farmer, Buyer, Supplier, and Admin roles, each with a scoped set of permissions.
 
-## Architecture
-
-BeanLink is a three-tier system with the ML component deliberately decoupled from the core application, so recommendation-model updates or downtime never affect marketplace browsing, price checking, or account management.
-
-```
-┌─────────────┐      ┌──────────────────┐      ┌───────────────────┐
-│   React      │ ───▶ │  Node.js /       │ ───▶ │  Flask ML          │
-│   Frontend   │ ◀─── │  Express         │ ◀─── │  Microservice       │
-│              │      │  (API Gateway)   │      │  (Random Forest +  │
-└─────────────┘      └────────┬─────────┘      │   SHAP)             │
-                               │                └───────────────────┘
-                               ▼
-                      ┌──────────────────┐
-                      │  Supabase          │
-                      │  (PostgreSQL)      │
-                      └──────────────────┘
-```
-
 | Layer | Technology | Role |
 |---|---|---|
 | Frontend | React + Tailwind | Farmer/buyer/supplier/admin interfaces |
@@ -106,21 +88,6 @@ Runs at `http://localhost:5001`. Health check: `GET /health`. Recommendation end
 
 Run the schema in `database/schema.sql` against your Supabase project's SQL editor to create all tables.
 
-## Environment variables
-
-Each service has its own `.env.example` documenting required variables. **Never commit real `.env` files** — they're git-ignored by design.
-
-**`api-gateway/.env`**
-```
-PORT=5000
-
-```
-
-**`ml-service/.env`**
-```
-PORT=5001
-```
-
 ## Machine learning
 
 The input-recommendation model is a Random Forest classifier trained on a KALRO-guideline-derived dataset (farm altitude, rainfall, soil pH, soil fertility class, farming system → recommended bean variety and fertilizer). Training, cross-validation, hyperparameter tuning, and SHAP explainability were carried out in Google Colab; trained models are exported as `.pkl` files and served by the Flask microservice. See `ml-service/models/` and the project report (Chapter 4/5) for full methodology and evaluation results.
@@ -132,6 +99,3 @@ This project follows a sprint-based Git workflow:
 - `dev` — active integration branch
 - `feature/*` — one branch per unit of work, merged into `dev` when complete
 
-## License
-
-Academic project — Strathmore University. Not licensed for commercial use.
