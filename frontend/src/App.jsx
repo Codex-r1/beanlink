@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Home, ShoppingBag, Sprout, Package, TrendingUp, ClipboardList, Receipt,
   User, Search, Bell, Menu, X, ChevronRight, ChevronLeft, ChevronDown,
@@ -10,58 +10,64 @@ import {
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
+import { registerUser, loginUser } from "./api";
 
 /* ============================================================================
    DESIGN TOKENS
-   Practical Kenyan agricultural platform: white/light neutral surfaces,
-   restrained agricultural green, dark text, subtle borders, moderate radius,
-   rectangular buttons, monospace used only for figures (prices, quantities,
-   IDs) as a small signature that reinforces the "transparent market data"
-   idea without adding decoration.
    ========================================================================== */
 const GlobalStyle = () => (
   <style>{`
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
     .agri-root {
-      --bg: #FAFAF8;
+      --bg: #F8F8F5;
       --surface: #FFFFFF;
-      --surface-alt: #F2F1EB;
-      --border: #DEDBD1;
-      --border-strong: #C6C1B4;
-      --text: #1E1E1A;
-      --text-muted: #67675D;
-      --text-faint: #93907F;
-      --primary: #2E5339;
-      --primary-dark: #1F3B28;
-      --primary-soft: #E7EEE6;
-      --primary-soft-border: #C6D8C4;
-      --amber: #92640E;
-      --amber-soft: #F4ECD9;
-      --amber-border: #DFC98F;
-      --blue: #3A5A80;
-      --blue-soft: #E6ECF2;
-      --blue-border: #BDCEDD;
-      --red: #A23C3C;
-      --red-soft: #F5E7E6;
-      --red-border: #E0BDBB;
+      --surface-alt: #F2F1EA;
+      --border: #E1DED4;
+      --border-strong: #C9C5B7;
+
+      --text: #1A1D1A;
+      --text-muted: #5A5D57;
+      --text-faint: #8A8D85;
+
+      --primary: #1E3A2B;
+      --primary-dark: #142619;
+      --primary-hover: #2A4A38;
+      --primary-soft: #E8EEE8;
+      --primary-soft-border: #C5D2C4;
+
+      --amber: #8A5A0B;
+      --amber-soft: #F5EEDC;
+      --amber-border: #E0CC97;
+
+      --blue: #2F4A6B;
+      --blue-soft: #E7EDF4;
+      --blue-border: #BFCDDD;
+
+      --red: #963A3A;
+      --red-soft: #F6E9E8;
+      --red-border: #E0BFBD;
+
       font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
       background: var(--bg);
       color: var(--text);
+      -webkit-font-smoothing: antialiased;
     }
     .agri-root .mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; }
 
+    /* Buttons */
     .agri-btn {
       display: inline-flex; align-items: center; justify-content: center; gap: 8px;
       padding: 10px 18px; border-radius: 4px; font-size: 14px; font-weight: 600;
-      border: 1px solid transparent; cursor: pointer; transition: background 0.12s ease, border-color 0.12s ease;
+      border: 1px solid transparent; cursor: pointer;
+      transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
       white-space: nowrap;
     }
     .agri-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-    .agri-btn-primary { background: var(--primary); color: #fff; }
-    .agri-btn-primary:hover { background: var(--primary-dark); }
+    .agri-btn-primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .agri-btn-primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
     .agri-btn-secondary { background: var(--surface); color: var(--text); border-color: var(--border-strong); }
-    .agri-btn-secondary:hover { background: var(--surface-alt); }
+    .agri-btn-secondary:hover { background: var(--surface-alt); border-color: var(--primary); color: var(--primary); }
     .agri-btn-ghost { background: transparent; color: var(--text-muted); border-color: transparent; }
     .agri-btn-ghost:hover { background: var(--surface-alt); color: var(--text); }
     .agri-btn-danger { background: var(--surface); color: var(--red); border-color: var(--red-border); }
@@ -70,57 +76,122 @@ const GlobalStyle = () => (
     .agri-btn-sm { padding: 6px 12px; font-size: 13px; }
     .agri-btn-block { width: 100%; }
 
-    .agri-card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; }
-    .agri-input, .agri-select, .agri-textarea {
-      width: 100%; border: 1px solid var(--border-strong); border-radius: 4px; padding: 9px 11px;
-      font-size: 14px; font-family: inherit; color: var(--text); background: var(--surface);
+    /* Cards */
+    .agri-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      box-shadow: 0 1px 2px rgba(26, 29, 26, 0.04);
     }
-    .agri-input:focus, .agri-select:focus, .agri-textarea:focus { outline: 2px solid var(--primary); outline-offset: 0; border-color: var(--primary); }
+
+    /* Inputs */
+    .agri-input, .agri-select, .agri-textarea {
+      width: 100%; border: 1px solid var(--border-strong); border-radius: 4px;
+      padding: 9px 11px; font-size: 14px; font-family: inherit; color: var(--text);
+      background: var(--surface); transition: border-color 0.12s, box-shadow 0.12s;
+    }
+    .agri-input:focus, .agri-select:focus, .agri-textarea:focus {
+      outline: none; border-color: var(--primary);
+      box-shadow: 0 0 0 2px var(--primary-soft-border);
+    }
     .agri-label { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 6px; display: block; }
     .agri-hint { font-size: 12.5px; color: var(--text-faint); margin-top: 4px; }
 
+    /* Badges */
     .agri-badge {
       display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600;
-      padding: 3px 8px 3px 6px; border-radius: 3px; border-left: 3px solid;
+      padding: 3px 8px 3px 7px; border-radius: 3px; border: 1px solid transparent;
+      border-left-width: 3px;
     }
-    .agri-badge-green { background: var(--primary-soft); border-color: var(--primary); color: var(--primary-dark); }
-    .agri-badge-amber { background: var(--amber-soft); border-color: var(--amber); color: var(--amber); }
-    .agri-badge-blue { background: var(--blue-soft); border-color: var(--blue); color: var(--blue); }
-    .agri-badge-red { background: var(--red-soft); border-color: var(--red); color: var(--red); }
-    .agri-badge-gray { background: var(--surface-alt); border-color: var(--border-strong); color: var(--text-muted); }
+    .agri-badge-green { background: var(--primary-soft); border-color: var(--primary-soft-border); border-left-color: var(--primary); color: var(--primary-dark); }
+    .agri-badge-amber { background: var(--amber-soft); border-color: var(--amber-border); border-left-color: var(--amber); color: var(--amber); }
+    .agri-badge-blue { background: var(--blue-soft); border-color: var(--blue-border); border-left-color: var(--blue); color: var(--blue); }
+    .agri-badge-red { background: var(--red-soft); border-color: var(--red-border); border-left-color: var(--red); color: var(--red); }
+    .agri-badge-gray { background: var(--surface-alt); border-color: var(--border); border-left-color: var(--border-strong); color: var(--text-muted); }
 
-    .agri-nav-link { display: flex; align-items: center; gap: 12px; padding: 9px 14px; border-radius: 4px; font-size: 14px; font-weight: 500; color: var(--text-muted); cursor: pointer; border-left: 3px solid transparent; }
+    /* Nav */
+    .agri-nav-link {
+      display: flex; align-items: center; gap: 12px; padding: 9px 14px; border-radius: 4px;
+      font-size: 14px; font-weight: 500; color: var(--text-muted); cursor: pointer;
+      border-left: 3px solid transparent; transition: background 0.12s, color 0.12s;
+    }
     .agri-nav-link:hover { background: var(--surface-alt); color: var(--text); }
-    .agri-nav-link.active { background: var(--primary-soft); color: var(--primary-dark); border-left-color: var(--primary); font-weight: 600; }
+    .agri-nav-link.active {
+      background: var(--primary-soft); color: var(--primary-dark);
+      border-left-color: var(--primary); font-weight: 600;
+    }
 
+    /* Tables */
     .agri-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
-    .agri-table th { text-align: left; padding: 10px 14px; font-weight: 600; color: var(--text-muted); border-bottom: 1px solid var(--border); white-space: nowrap; font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.03em; }
-    .agri-table td { padding: 12px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    .agri-table th {
+      text-align: left; padding: 11px 14px; font-weight: 600; color: var(--text-muted);
+      border-bottom: 1px solid var(--border); white-space: nowrap; font-size: 12px;
+      text-transform: uppercase; letter-spacing: 0.04em; background: var(--surface-alt);
+    }
+    .agri-table td { padding: 13px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
     .agri-table tr:last-child td { border-bottom: none; }
+    .agri-table tbody tr:hover td { background: #FBFBF8; }
     .agri-table-wrap { overflow-x: auto; }
 
-    .agri-step { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12.5px; font-weight: 700; border: 1.5px solid var(--border-strong); color: var(--text-faint); background: var(--surface); flex-shrink: 0; }
+    /* Steps */
+    .agri-step {
+      width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center;
+      justify-content: center; font-size: 12.5px; font-weight: 700;
+      border: 1.5px solid var(--border-strong); color: var(--text-faint);
+      background: var(--surface); flex-shrink: 0;
+    }
     .agri-step.active { border-color: var(--primary); background: var(--primary); color: #fff; }
     .agri-step.done { border-color: var(--primary); background: var(--primary-soft); color: var(--primary-dark); }
 
+    /* Bars */
     .agri-bar-track { height: 8px; background: var(--surface-alt); border-radius: 3px; overflow: hidden; }
     .agri-bar-fill { height: 100%; background: var(--primary); border-radius: 3px; }
 
+    /* Misc */
     a.agri-plain { text-decoration: none; color: inherit; }
     .agri-scroll::-webkit-scrollbar { height: 6px; width: 6px; }
     .agri-scroll::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+
+    /* Stat card with left accent */
+    .agri-stat {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--primary);
+      border-radius: 6px;
+      box-shadow: 0 1px 2px rgba(26, 29, 26, 0.04);
+    }
+
+    /* Feature tile */
+    .agri-feature {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      transition: border-color 0.12s ease;
+    }
+    .agri-feature:hover { border-color: var(--primary-soft-border); }
+
+    /* Skeleton loading */
+    @keyframes agri-pulse {
+      0%, 100% { opacity: 1; }
+      50%      { opacity: 0.55; }
+    }
+    .agri-skel {
+      background: var(--surface-alt);
+      border-radius: 4px;
+      animation: agri-pulse 1.4s ease-in-out infinite;
+    }
+
+    /* Toast slide-in */
+    @keyframes agri-toast-in {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
   `}</style>
 );
 
 /* ============================================================================
-   MOCK DATA — shaped so each block maps cleanly to a future API/DB response.
+   MOCK DATA
    ========================================================================== */
-const currentUser = {
-  farmer: { name: "Josephine Mwangi", location: "Machakos County", role: "farmer" },
-  buyer: { name: "Daniel Otieno", location: "Nairobi", role: "buyer" },
-  admin: { name: "Grace Wambui", location: "Nairobi HQ", role: "admin" },
-};
-
 const inputCategories = [
   { id: "seeds", label: "Certified Seeds", icon: Sprout },
   { id: "fertilizers", label: "Fertilizers", icon: Beaker },
@@ -207,7 +278,6 @@ const adminStats = [
   { label: "Market Price Records", value: 1975, icon: BarChart3 },
 ];
 
-// Structured to mirror the eventual Random Forest recommendation API response.
 function buildRecommendationResult(formData) {
   return {
     recommendation: {
@@ -228,7 +298,208 @@ function buildRecommendationResult(formData) {
 }
 
 /* ============================================================================
-   SHARED UI PRIMITIVES
+   TOAST SYSTEM
+   ========================================================================== */
+const ToastCtx = React.createContext({ push: () => {} });
+const useToast = () => React.useContext(ToastCtx);
+
+function ToastHost({ children }) {
+  const [toasts, setToasts] = useState([]);
+
+  const push = React.useCallback((msg, tone = "green") => {
+    const id = Math.random().toString(36).slice(2);
+    setToasts((t) => [...t, { id, msg, tone }]);
+    setTimeout(() => {
+      setToasts((t) => t.filter((x) => x.id !== id));
+    }, 3200);
+  }, []);
+
+  return (
+    <ToastCtx.Provider value={{ push }}>
+      {children}
+      <div
+        className="fixed bottom-24 md:bottom-6 right-4 md:right-6 z-50 flex flex-col gap-2 pointer-events-none"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        {toasts.map((t) => {
+          const accent =
+            t.tone === "green" ? "var(--primary)" :
+            t.tone === "red" ? "var(--red)" :
+            "var(--amber)";
+          const Icon =
+            t.tone === "green" ? CheckCircle2 :
+            t.tone === "red" ? AlertCircle :
+            AlertCircle;
+          return (
+            <div
+              key={t.id}
+              className="agri-card px-4 py-3 text-sm font-medium flex items-center gap-2"
+              style={{
+                borderLeft: `3px solid ${accent}`,
+                minWidth: 260,
+                maxWidth: 340,
+                animation: "agri-toast-in 180ms ease-out",
+              }}
+              role="status"
+            >
+              <Icon size={15} style={{ color: accent, flexShrink: 0 }} />
+              <span style={{ color: "var(--text)" }}>{t.msg}</span>
+            </div>
+          );
+        })}
+      </div>
+    </ToastCtx.Provider>
+  );
+}
+
+/* ============================================================================
+   COUNT-UP STAT
+   ========================================================================== */
+function CountUp({ to, duration = 1200, suffix = "" }) {
+  const [n, setN] = useState(0);
+  const ref = React.useRef(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (typeof IntersectionObserver === "undefined") {
+      setN(to);
+      return;
+    }
+    const io = new IntersectionObserver(
+      ([e]) => {
+        if (!e.isIntersecting) return;
+        io.disconnect();
+        const start = performance.now();
+        const tick = (t) => {
+          const p = Math.min(1, (t - start) / duration);
+          const eased = 1 - Math.pow(1 - p, 3);
+          setN(Math.round(to * eased));
+          if (p < 1) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      },
+      { threshold: 0.4 }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [to, duration]);
+
+  return (
+    <span ref={ref} className="mono">
+      {n.toLocaleString("en-KE")}
+      {suffix}
+    </span>
+  );
+}
+
+/* ============================================================================
+   HERO SLIDESHOW
+   ========================================================================== */
+const HERO_SLIDES = [
+  {
+    src: "annie-spratt-QYcSeY7vuZM-unsplash.jpg",
+    alt: "Bean field in Kenya",
+  },
+  {
+    src: "annie-spratt-GaLzDCnA5EI-unsplash.jpg",
+    alt: "Farmer harvesting beans by hand",
+  },
+  {
+    src: "Untitled design.jpg",
+    alt: "Sorting dried beans",
+  },
+   {
+    src: "kelly-sikkema-k1cpHnqBuMM-unsplash.jpg",
+    alt: "Beans drying on tarps",
+  },
+];
+
+function HeroSlideshow({ interval = 5000 }) {
+  const [index, setIndex] = useState(0);
+  const [paused, setPaused] = useState(false);
+
+  const prefersReduced = useMemo(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return false;
+    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }, []);
+
+  useEffect(() => {
+    if (paused || prefersReduced || HERO_SLIDES.length < 2) return;
+    const id = setInterval(() => {
+      setIndex((i) => (i + 1) % HERO_SLIDES.length);
+    }, interval);
+    return () => clearInterval(id);
+  }, [paused, prefersReduced, interval]);
+
+  const prev = () => setIndex((i) => (i - 1 + HERO_SLIDES.length) % HERO_SLIDES.length);
+  const next = () => setIndex((i) => (i + 1) % HERO_SLIDES.length);
+
+  return (
+    <div
+      className="agri-card p-2"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onFocus={() => setPaused(true)}
+      onBlur={() => setPaused(false)}
+    >
+      <div className="relative w-full h-72 rounded overflow-hidden bg-[var(--surface-alt)]">
+        {HERO_SLIDES.map((s, i) => (
+          <img
+            key={s.src}
+            src={s.src}
+            alt={s.alt}
+            loading={i === 0 ? "eager" : "lazy"}
+            className="absolute inset-0 w-full h-full object-cover"
+            style={{
+              opacity: i === index ? 1 : 0,
+              transition: prefersReduced ? "none" : "opacity 700ms ease-in-out",
+            }}
+          />
+        ))}
+
+        <button
+          type="button"
+          onClick={prev}
+          aria-label="Previous slide"
+          className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center rounded opacity-0 hover:opacity-100 focus:opacity-100 transition-opacity"
+          style={{ background: "rgba(20, 38, 25, 0.78)", color: "#fff" }}
+        >
+          <ChevronLeft size={18} />
+        </button>
+        <button
+          type="button"
+          onClick={next}
+          aria-label="Next slide"
+          className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center rounded opacity-0 hover:opacity-100 focus:opacity-100 transition-opacity"
+          style={{ background: "rgba(20, 38, 25, 0.78)", color: "#fff" }}
+        >
+          <ChevronRight size={18} />
+        </button>
+
+        <div className="absolute right-3 bottom-3 flex items-center gap-1.5">
+          {HERO_SLIDES.map((s, i) => (
+            <button
+              key={s.src}
+              type="button"
+              aria-label={`Go to slide ${i + 1}`}
+              onClick={() => setIndex(i)}
+              className="w-2 h-2 rounded-sm transition-colors"
+              style={{
+                background: i === index ? "var(--primary)" : "rgba(255,255,255,0.65)",
+                border: "1px solid rgba(20, 38, 25, 0.45)",
+              }}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================================
+   SHARED UI
    ========================================================================== */
 const Badge = ({ tone = "gray", icon: Icon, children }) => (
   <span className={`agri-badge agri-badge-${tone}`}>{Icon && <Icon size={12} />}{children}</span>
@@ -262,7 +533,7 @@ const SectionHeading = ({ eyebrow, title, subtitle, action }) => (
   <div className="flex items-start justify-between gap-4 flex-wrap mb-5">
     <div>
       {eyebrow && <div className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: "var(--primary)" }}>{eyebrow}</div>}
-      <h2 className="text-xl font-bold" style={{ color: "var(--text)" }}>{title}</h2>
+      <h2 className="text-xl font-bold" style={{ color: "var(--text)", letterSpacing: "-0.01em" }}>{title}</h2>
       {subtitle && <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>{subtitle}</p>}
     </div>
     {action}
@@ -270,7 +541,7 @@ const SectionHeading = ({ eyebrow, title, subtitle, action }) => (
 );
 
 const StatCard = ({ label, value, icon: Icon, mono = true }) => (
-  <div className="agri-card p-4">
+  <div className="agri-stat p-4">
     <div className="flex items-center justify-between mb-2">
       <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>{label}</span>
       {Icon && <Icon size={16} style={{ color: "var(--primary)" }} />}
@@ -283,35 +554,105 @@ const fmtKES = (n) => `KES ${Number(n).toLocaleString("en-KE")}`;
 const fmtDate = (d) => new Date(d).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" });
 
 /* ============================================================================
-   LANDING PAGE
+   GUEST HEADER — shared across Landing, Guest Marketplace, Guest Prices, About
    ========================================================================== */
-function Landing({ goto }) {
+function GuestHeader({ page, goto, goLogin, goRegister }) {
+  const links = [
+    { id: "landing", label: "Home" },
+    { id: "guest-produce", label: "Marketplace" },
+    { id: "guest-prices", label: "Market Prices" },
+    { id: "about", label: "About" },
+  ];
+
+  return (
+    <header
+      className="border-b sticky top-0 z-20"
+      style={{ borderColor: "var(--border)", background: "var(--surface)" }}
+    >
+      <div className="max-w-6xl mx-auto px-5 py-4 flex items-center justify-between gap-4">
+        <button className="flex items-center gap-2 font-bold text-lg" onClick={() => goto("landing")}>
+          <div className="w-8 h-8 flex items-center justify-center rounded" style={{ background: "var(--primary)" }}>
+            <Sprout size={18} color="#fff" />
+          </div>
+          Bean<span style={{ color: "var(--primary)" }}>Link</span>
+        </button>
+
+        <nav className="hidden md:flex items-center gap-6 text-sm font-medium" style={{ color: "var(--text-muted)" }}>
+          {links.map((l) => {
+            const active = page === l.id;
+            return (
+              <button
+                key={l.id}
+                onClick={() => goto(l.id)}
+                className="agri-plain relative py-1"
+                style={{
+                  color: active ? "var(--primary)" : "var(--text-muted)",
+                  fontWeight: active ? 700 : 500,
+                }}
+              >
+                {l.label}
+                {active && (
+                  <span
+                    className="absolute left-0 right-0 -bottom-[18px] h-[2px]"
+                    style={{ background: "var(--primary)" }}
+                  />
+                )}
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="flex items-center gap-3">
+          <button
+            className="text-sm font-semibold hidden sm:block"
+            style={{ color: "var(--text)" }}
+            onClick={goLogin}
+          >
+            Login
+          </button>
+          <Button size="sm" onClick={goRegister}>Register</Button>
+        </div>
+      </div>
+
+      <div
+        className="md:hidden border-t overflow-x-auto agri-scroll"
+        style={{ borderColor: "var(--border)", background: "var(--surface)" }}
+      >
+        <div className="flex gap-1 px-3 py-2 min-w-max">
+          {links.map((l) => {
+            const active = page === l.id;
+            return (
+              <button
+                key={l.id}
+                onClick={() => goto(l.id)}
+                className="px-3 py-1.5 text-sm font-semibold rounded"
+                style={{
+                  color: active ? "var(--primary-dark)" : "var(--text-muted)",
+                  background: active ? "var(--primary-soft)" : "transparent",
+                  border: active ? "1px solid var(--primary-soft-border)" : "1px solid transparent",
+                }}
+              >
+                {l.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </header>
+  );
+}
+
+/* ============================================================================
+   LANDING
+   ========================================================================== */
+function Landing({ goto, goLogin, goRegister }) {
   return (
     <div className="agri-root min-h-screen">
-      <header className="border-b" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-        <div className="max-w-6xl mx-auto px-5 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2 font-bold text-lg">
-            <div className="w-8 h-8 flex items-center justify-center rounded" style={{ background: "var(--primary)" }}>
-              <Sprout size={18} color="#fff" />
-            </div>
-            Bean<span style={{ color: "var(--primary)" }}>Link</span>
-          </div>
-          <nav className="hidden md:flex items-center gap-6 text-sm font-medium" style={{ color: "var(--text-muted)" }}>
-            <button className="agri-plain" onClick={() => goto("landing")}>Home</button>
-            <button className="agri-plain" onClick={() => goto("guest-produce")}>Marketplace</button>
-            <button className="agri-plain" onClick={() => goto("guest-prices")}>Market Prices</button>
-            <button className="agri-plain" onClick={() => goto("landing")}>About</button>
-          </nav>
-          <div className="flex items-center gap-3">
-            <button className="text-sm font-semibold" style={{ color: "var(--text)" }} onClick={() => goto("login")}>Login</button>
-            <Button size="sm" onClick={() => goto("login")}>Register</Button>
-          </div>
-        </div>
-      </header>
+      <GuestHeader page="landing" goto={goto} goLogin={goLogin} goRegister={goRegister} />
 
       <section className="max-w-6xl mx-auto px-5 pt-14 pb-16 grid md:grid-cols-2 gap-10 items-center">
         <div>
-          <h1 className="text-4xl md:text-[2.6rem] leading-tight font-bold mb-5">
+          <h1 className="text-4xl md:text-[2.6rem] leading-tight font-bold mb-5" style={{ letterSpacing: "-0.02em" }}>
             Connecting Kenyan Bean Farmers to Better Markets and Better Decisions
           </h1>
           <p className="text-base mb-7" style={{ color: "var(--text-muted)" }}>
@@ -323,23 +664,17 @@ function Landing({ goto }) {
             <Button variant="secondary" onClick={() => goto("guest-prices")}>View Market Prices</Button>
           </div>
         </div>
-        <div className="agri-card p-2">
-          <img
-            alt="Farmer inspecting a bean field in Kenya"
-            className="w-full h-72 object-cover rounded"
-            src="annie-spratt-QYcSeY7vuZM-unsplash.jpg"
-          />
-        </div>
+        <HeroSlideshow />
       </section>
 
-      <section className="max-w-6xl mx-auto px-5 pb-16 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <section className="max-w-6xl mx-auto px-5 pb-14 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { icon: ShoppingBag, title: "Access Farm Inputs", desc: "Find agricultural inputs from verified sellers near you." },
           { icon: Sprout, title: "Smart Input Recommendations", desc: "Get recommendations based on farm and soil conditions using a Random Forest model." },
           { icon: Wheat, title: "Sell Your Bean Produce", desc: "List harvested beans and connect with potential buyers." },
           { icon: TrendingUp, title: "View Market Prices", desc: "Access current and historical bean market prices from recorded market data." },
         ].map((f, i) => (
-          <div key={i} className="agri-card p-5">
+          <div key={i} className="agri-feature p-5">
             <div className="w-9 h-9 rounded flex items-center justify-center mb-3" style={{ background: "var(--primary-soft)" }}>
               <f.icon size={18} style={{ color: "var(--primary)" }} />
             </div>
@@ -347,6 +682,35 @@ function Landing({ goto }) {
             <p className="text-sm" style={{ color: "var(--text-muted)" }}>{f.desc}</p>
           </div>
         ))}
+      </section>
+
+      {/* By the numbers — count-up */}
+      <section className="max-w-6xl mx-auto px-5 pb-16">
+        <div className="mb-5">
+          <div className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: "var(--primary)" }}>
+            By the numbers
+          </div>
+          <h2 className="text-xl font-bold" style={{ letterSpacing: "-0.01em" }}>
+            Trusted across Kenya
+          </h2>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[
+            { label: "Registered farmers", to: 1284 },
+            { label: "Active listings", to: 612 },
+            { label: "Transactions completed", to: 4130 },
+            { label: "Counties covered", to: 24 },
+          ].map((s) => (
+            <div key={s.label} className="agri-stat p-5">
+              <div className="text-3xl font-bold mb-1">
+                <CountUp to={s.to} />
+              </div>
+              <div className="text-xs uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
+                {s.label}
+              </div>
+            </div>
+          ))}
+        </div>
       </section>
 
       <footer className="border-t py-6 text-center text-xs" style={{ borderColor: "var(--border)", color: "var(--text-faint)" }}>
@@ -357,14 +721,110 @@ function Landing({ goto }) {
 }
 
 /* ============================================================================
-   LOGIN / REGISTER (mock)
+   ABOUT (public page)
+   ========================================================================== */
+function AboutPage({ goto, goLogin, goRegister }) {
+  return (
+    <div className="agri-root min-h-screen">
+      <GuestHeader page="about" goto={goto} goLogin={goLogin} goRegister={goRegister} />
+      <div className="max-w-3xl mx-auto px-5 py-14">
+        <div className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: "var(--primary)" }}>
+          About BeanLink
+        </div>
+        <h1 className="text-3xl font-bold mb-4" style={{ letterSpacing: "-0.02em" }}>
+          Built to connect smallholder bean farmers with better markets.
+        </h1>
+        <p className="text-base mb-4" style={{ color: "var(--text-muted)" }}>
+          BeanLink is an agricultural marketplace and decision-support platform for
+          smallholder bean farmers in Kenya. It brings together three tools that are
+          usually separate: a marketplace for certified farm inputs, a marketplace for
+          harvested produce, and a data-driven input recommendation engine.
+        </p>
+        <p className="text-base mb-8" style={{ color: "var(--text-muted)" }}>
+          Recommendations are produced by a Random Forest model trained on soil, agro-
+          ecological, and crop-history features. Recorded market prices come from
+          trusted sources such as WFP and NCPB and are updated by platform administrators.
+        </p>
+
+        <div className="grid sm:grid-cols-3 gap-4 mb-10">
+          {[
+            { icon: Wheat, title: "Market access", desc: "Sell produce directly to verified buyers across Kenya." },
+            { icon: Sprout, title: "Decision support", desc: "Input recommendations based on your farm's specific conditions." },
+            { icon: TrendingUp, title: "Price transparency", desc: "Recorded bean prices you can check before you sell." },
+          ].map((c, i) => (
+            <div key={i} className="agri-feature p-5">
+              <div className="w-9 h-9 rounded flex items-center justify-center mb-3" style={{ background: "var(--primary-soft)" }}>
+                <c.icon size={18} style={{ color: "var(--primary)" }} />
+              </div>
+              <h3 className="font-semibold mb-1.5">{c.title}</h3>
+              <p className="text-sm" style={{ color: "var(--text-muted)" }}>{c.desc}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="agri-card p-6 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <div className="font-semibold mb-1">Ready to get started?</div>
+            <div className="text-sm" style={{ color: "var(--text-muted)" }}>
+              Create a free account as a farmer, buyer, or supplier.
+            </div>
+          </div>
+          <Button onClick={goRegister}>Create Account</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================================
+   LOGIN / REGISTER
    ========================================================================== */
 function Login({ goto, onLogin, mode, setMode }) {
-  const [selectedRole, setSelectedRole] = useState("farmer");
+  const [role, setRole] = useState("farmer");
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [county, setCounty] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async () => {
+    setError("");
+    setLoading(true);
+    try {
+      let data;
+      if (mode === "login") {
+        data = await loginUser({ email, password });
+      } else {
+        const safeRole = ["farmer", "buyer", "supplier"].includes(role) ? role : "farmer";
+        data = await registerUser({
+          full_name: fullName,
+          email,
+          password,
+          role: safeRole,
+          phone_number: phone,
+          county,
+        });
+      }
+      localStorage.setItem("beanlink_token", data.token);
+      localStorage.setItem("beanlink_user", JSON.stringify(data.user));
+      onLogin(data.user);
+    } catch (err) {
+      setError(err.message || "Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className="agri-root min-h-screen flex items-center justify-center px-5">
+    <div className="agri-root min-h-screen flex items-center justify-center px-5 py-10">
       <div className="w-full max-w-sm">
-        <button className="flex items-center gap-1 text-sm mb-6" style={{ color: "var(--text-muted)" }} onClick={() => goto("landing")}>
+        <button
+          className="flex items-center gap-1 text-sm mb-6"
+          style={{ color: "var(--text-muted)" }}
+          onClick={() => goto("landing")}
+        >
           <ArrowLeft size={15} /> Back to home
         </button>
         <div className="agri-card p-6">
@@ -379,53 +839,77 @@ function Login({ goto, onLogin, mode, setMode }) {
           </p>
 
           <div className="space-y-4">
-            <Field label="I am a...">
-              <div className="grid grid-cols-3 gap-2">
-                {["farmer", "buyer", "admin"].map((r) => (
-                  <button
-                    key={r}
-                    onClick={() => setSelectedRole(r)}
-                    className="agri-btn agri-btn-sm"
-                    style={{
-                      background: selectedRole === r ? "var(--primary-soft)" : "var(--surface)",
-                      border: `1px solid ${selectedRole === r ? "var(--primary)" : "var(--border-strong)"}`,
-                      color: selectedRole === r ? "var(--primary-dark)" : "var(--text-muted)",
-                      textTransform: "capitalize",
-                    }}
-                  >
-                    {r}
-                  </button>
-                ))}
-              </div>
-            </Field>
-            <Field label="Phone number or email">
-              <input className="agri-input" placeholder="e.g. 0712 345 678" defaultValue="0712 345 678" />
+            {mode === "register" && (
+              <>
+                <Field label="I am a...">
+                  <div className="grid grid-cols-3 gap-2">
+                    {["farmer", "buyer", "supplier"].map((r) => (
+                      <button
+                        key={r}
+                        onClick={() => setRole(r)}
+                        className="agri-btn agri-btn-sm"
+                        style={{
+                          background: role === r ? "var(--primary-soft)" : "var(--surface)",
+                          border: `1px solid ${role === r ? "var(--primary)" : "var(--border-strong)"}`,
+                          color: role === r ? "var(--primary-dark)" : "var(--text-muted)",
+                          textTransform: "capitalize",
+                          padding: "8px 4px",
+                          fontWeight: role === r ? 700 : 600,
+                        }}
+                      >
+                        {r}
+                      </button>
+                    ))}
+                  </div>
+                </Field>
+                <Field label="Full name">
+                  <input className="agri-input" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="e.g. Josephine Mwangi" />
+                </Field>
+                <Field label="Phone number">
+                  <input className="agri-input" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="e.g. 0712 345 678" />
+                </Field>
+                <Field label="County">
+                  <input className="agri-input" value={county} onChange={(e) => setCounty(e.target.value)} placeholder="e.g. Machakos" />
+                </Field>
+              </>
+            )}
+
+            <Field label="Email">
+              <input className="agri-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
             </Field>
             <Field label="Password">
-              <input className="agri-input" type="password" defaultValue="••••••••" />
+              <input className="agri-input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
             </Field>
-            <Button className="agri-btn-block" onClick={() => onLogin(selectedRole)}>
-              {mode === "login" ? "Log In" : "Create Account"}
+
+            {error && (
+              <div className="text-sm p-2.5 rounded" style={{ background: "var(--red-soft)", color: "var(--red)", border: "1px solid var(--red-border)" }}>
+                {error}
+              </div>
+            )}
+
+            <Button className="agri-btn-block" onClick={handleSubmit} disabled={loading}>
+              {loading ? "Please wait..." : mode === "login" ? "Log In" : "Create Account"}
             </Button>
           </div>
 
           <p className="text-sm text-center mt-5" style={{ color: "var(--text-muted)" }}>
             {mode === "login" ? "New to BeanLink?" : "Already have an account?"}{" "}
-            <button className="font-semibold" style={{ color: "var(--primary)" }} onClick={() => setMode(mode === "login" ? "register" : "login")}>
+            <button
+              className="font-semibold"
+              style={{ color: "var(--primary)" }}
+              onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }}
+            >
               {mode === "login" ? "Register" : "Log In"}
             </button>
           </p>
         </div>
-        <p className="text-xs text-center mt-4" style={{ color: "var(--text-faint)" }}>
-          Demo build — select a role above to preview that experience.
-        </p>
       </div>
     </div>
   );
 }
 
 /* ============================================================================
-   APP SHELL (sidebar + top bar + mobile nav)
+   APP SHELL
    ========================================================================== */
 const NAV_BY_ROLE = {
   farmer: [
@@ -446,6 +930,13 @@ const NAV_BY_ROLE = {
     { id: "transactions", label: "Transactions", icon: Receipt },
     { id: "profile", label: "Profile", icon: User },
   ],
+  supplier: [
+    { id: "dashboard", label: "Dashboard", icon: Home },
+    { id: "input-marketplace", label: "Marketplace", icon: ShoppingBag },
+    { id: "orders", label: "Orders", icon: ClipboardList },
+    { id: "transactions", label: "Transactions", icon: Receipt },
+    { id: "profile", label: "Profile", icon: User },
+  ],
   admin: [
     { id: "dashboard", label: "Dashboard", icon: Home },
     { id: "admin-users", label: "Users", icon: Users },
@@ -457,15 +948,13 @@ const NAV_BY_ROLE = {
   ],
 };
 
-function AppShell({ role, page, goto, onLogout, children }) {
+function AppShell({ role, user, page, goto, onLogout, children }) {
   const [mobileMenu, setMobileMenu] = useState(false);
-  const nav = NAV_BY_ROLE[role];
-  const user = currentUser[role];
+  const nav = NAV_BY_ROLE[role] || NAV_BY_ROLE.farmer;
   const mobilePrimary = nav.slice(0, 4);
 
   return (
     <div className="agri-root min-h-screen flex">
-      {/* Desktop sidebar */}
       <aside className="hidden md:flex w-60 shrink-0 flex-col border-r" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
         <div className="px-5 py-5 flex items-center gap-2 font-bold text-base border-b" style={{ borderColor: "var(--border)" }}>
           <div className="w-7 h-7 flex items-center justify-center rounded" style={{ background: "var(--primary)" }}>
@@ -488,7 +977,6 @@ function AppShell({ role, page, goto, onLogout, children }) {
       </aside>
 
       <div className="flex-1 min-w-0 flex flex-col">
-        {/* Top bar */}
         <header className="border-b px-4 md:px-6 py-3 flex items-center gap-3 sticky top-0 z-10" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
           <button className="md:hidden" onClick={() => setMobileMenu(true)} aria-label="Open menu">
             <Menu size={22} />
@@ -504,16 +992,15 @@ function AppShell({ role, page, goto, onLogout, children }) {
           </button>
           <button className="flex items-center gap-2" onClick={() => goto("profile")}>
             <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold" style={{ background: "var(--primary-soft)", color: "var(--primary-dark)" }}>
-              {user.name.split(" ").map((p) => p[0]).join("").slice(0, 2)}
+              {user.full_name.split(" ").map((p) => p[0]).join("").slice(0, 2)}
             </div>
-            <span className="hidden md:block text-sm font-medium">{user.name}</span>
+            <span className="hidden md:block text-sm font-medium">{user.full_name}</span>
           </button>
         </header>
 
         <main className="flex-1 p-4 md:p-7 pb-20 md:pb-7">{children}</main>
       </div>
 
-      {/* Mobile bottom nav */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 border-t flex z-20" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
         {mobilePrimary.map((n) => (
           <button key={n.id} onClick={() => goto(n.id)} className="flex-1 flex flex-col items-center gap-1 py-2.5" style={{ color: page === n.id ? "var(--primary)" : "var(--text-faint)" }}>
@@ -527,7 +1014,6 @@ function AppShell({ role, page, goto, onLogout, children }) {
         </button>
       </nav>
 
-      {/* Mobile slide-over menu */}
       {mobileMenu && (
         <div className="fixed inset-0 z-30 flex">
           <div className="flex-1" style={{ background: "rgba(0,0,0,0.3)" }} onClick={() => setMobileMenu(false)} />
@@ -554,15 +1040,16 @@ function AppShell({ role, page, goto, onLogout, children }) {
 /* ============================================================================
    FARMER DASHBOARD
    ========================================================================== */
-function FarmerDashboard({ goto }) {
+function FarmerDashboard({ goto, user }) {
   const latest = marketPriceHistory.filter((p) => p.variety === "Rosecoco" && p.market === "Nairobi").slice(-1)[0];
   const chartData = marketPriceHistory
     .filter((p) => p.variety === "Rosecoco" && p.market === "Nairobi")
     .map((p) => ({ date: p.date.slice(5), price: p.price }));
+  const firstName = user.full_name.split(" ")[0];
 
   return (
     <div>
-      <SectionHeading title="Good morning, Josephine" subtitle="Here is an overview of your farming and marketplace activity." />
+      <SectionHeading title={`Good morning, ${firstName}`} subtitle="Here is an overview of your farming and marketplace activity." />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-7">
         <StatCard label="Active Listings" value="3" icon={Wheat} />
@@ -638,12 +1125,13 @@ function FarmerDashboard({ goto }) {
 }
 
 /* ============================================================================
-   BUYER DASHBOARD (simple)
+   BUYER DASHBOARD
    ========================================================================== */
-function BuyerDashboard({ goto }) {
+function BuyerDashboard({ goto, user }) {
+  const firstName = user.full_name.split(" ")[0];
   return (
     <div>
-      <SectionHeading title="Welcome back, Daniel" subtitle="Here is an overview of your marketplace activity." />
+      <SectionHeading title={`Welcome back, ${firstName}`} subtitle="Here is an overview of your marketplace activity." />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-7">
         <StatCard label="Open Orders" value="2" icon={ClipboardList} />
         <StatCard label="Completed Orders" value="21" icon={CheckCircle2} />
@@ -691,7 +1179,32 @@ const ProduceRow = ({ p, onClick }) => (
 );
 
 /* ============================================================================
-   INPUT RECOMMENDATION (multi-step ML form)
+   SUPPLIER DASHBOARD
+   ========================================================================== */
+function SupplierDashboard({ goto, user }) {
+  const firstName = user.full_name.split(" ")[0];
+  return (
+    <div>
+      <SectionHeading title={`Welcome back, ${firstName}`} subtitle="Here is an overview of your supplier activity." />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-7">
+        <StatCard label="Active Listings" value="5" icon={Package} />
+        <StatCard label="Pending Orders" value="3" icon={ClipboardList} />
+        <StatCard label="Completed Sales" value="42" icon={CheckCircle2} />
+        <StatCard label="Total Revenue" value={fmtKES(186400)} icon={Receipt} />
+      </div>
+      <div className="agri-card p-5">
+        <h3 className="font-semibold mb-4">Quick Actions</h3>
+        <div className="space-y-2 max-w-sm">
+          <Button className="agri-btn-block" onClick={() => goto("input-marketplace")}>Manage Product Listings</Button>
+          <Button className="agri-btn-block" variant="secondary" onClick={() => goto("orders")}>View Orders</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================================
+   INPUT RECOMMENDATION — with skeleton loading
    ========================================================================== */
 function InputRecommendation() {
   const [step, setStep] = useState(1);
@@ -709,8 +1222,31 @@ function InputRecommendation() {
     setTimeout(() => {
       setResult(buildRecommendationResult(form));
       setLoading(false);
-    }, 900);
+    }, 1400);
   };
+
+  // Skeleton while the "model" runs
+  if (loading) {
+    return (
+      <div className="max-w-2xl">
+        <SectionHeading
+          eyebrow="Random Forest Model"
+          title="Analysing farm conditions…"
+          subtitle="Running your inputs through the recommendation model."
+        />
+        <div className="space-y-3">
+          <div className="agri-skel h-6 w-56" />
+          <div className="grid sm:grid-cols-3 gap-3">
+            <div className="agri-skel h-28" />
+            <div className="agri-skel h-28" />
+            <div className="agri-skel h-28" />
+          </div>
+          <div className="agri-skel h-40" />
+          <div className="agri-skel h-10 w-48" />
+        </div>
+      </div>
+    );
+  }
 
   if (result) {
     return (
@@ -824,7 +1360,7 @@ function InputRecommendation() {
           {step < totalSteps ? (
             <Button onClick={() => setStep((s) => s + 1)}>Next</Button>
           ) : (
-            <Button onClick={submit} disabled={loading}>{loading ? "Analysing Farm Conditions..." : "Get Recommendation"}</Button>
+            <Button onClick={submit} disabled={loading}>{loading ? "Analysing…" : "Get Recommendation"}</Button>
           )}
         </div>
       </div>
@@ -833,11 +1369,16 @@ function InputRecommendation() {
 }
 
 /* ============================================================================
-   FARM INPUT MARKETPLACE + DETAIL
+   INPUT MARKETPLACE — with toasts
    ========================================================================== */
 function InputMarketplace({ goto }) {
+  const { push } = useToast();
   const [category, setCategory] = useState("all");
   const filtered = category === "all" ? inputProducts : inputProducts.filter((p) => p.category === category);
+
+  const addToCart = (p) => {
+    push(`${p.name} added to cart`, "green");
+  };
 
   return (
     <div>
@@ -867,7 +1408,7 @@ function InputMarketplace({ goto }) {
             </div>
             <div className="mt-auto flex gap-2">
               <Button variant="secondary" size="sm" className="agri-btn-block" onClick={() => goto("input-detail", p)}>View Details</Button>
-              <Button size="sm" className="agri-btn-block" disabled={!p.available}>Add to Cart</Button>
+              <Button size="sm" className="agri-btn-block" disabled={!p.available} onClick={() => addToCart(p)}>Add to Cart</Button>
             </div>
           </div>
         ))}
@@ -877,6 +1418,7 @@ function InputMarketplace({ goto }) {
 }
 
 function InputDetail({ item, goto }) {
+  const { push } = useToast();
   if (!item) return null;
   return (
     <div className="max-w-2xl">
@@ -899,8 +1441,8 @@ function InputDetail({ item, goto }) {
           <div><div className="text-xs mb-1" style={{ color: "var(--text-faint)" }}>Location</div><div className="font-semibold flex items-center gap-1"><MapPin size={13} />{item.location}</div></div>
         </div>
         <div className="flex gap-3">
-          <Button variant="secondary" className="agri-btn-block" disabled={!item.available}>Add to Cart</Button>
-          <Button className="agri-btn-block" disabled={!item.available}>Buy Now</Button>
+          <Button variant="secondary" className="agri-btn-block" disabled={!item.available} onClick={() => push(`${item.name} added to cart`, "green")}>Add to Cart</Button>
+          <Button className="agri-btn-block" disabled={!item.available} onClick={() => push(`Order placed: ${item.name}`, "green")}>Buy Now</Button>
         </div>
       </div>
     </div>
@@ -908,7 +1450,7 @@ function InputDetail({ item, goto }) {
 }
 
 /* ============================================================================
-   BEAN PRODUCE MARKETPLACE + DETAIL
+   PRODUCE MARKETPLACE
    ========================================================================== */
 function ProduceMarketplace({ goto }) {
   const [variety, setVariety] = useState("all");
@@ -970,6 +1512,7 @@ function ProduceMarketplace({ goto }) {
 }
 
 function ProduceDetail({ item, goto }) {
+  const { push } = useToast();
   if (!item) return null;
   return (
     <div className="max-w-2xl">
@@ -989,20 +1532,22 @@ function ProduceDetail({ item, goto }) {
           <div><div className="text-xs mb-1" style={{ color: "var(--text-faint)" }}>Harvest Date</div><div className="font-semibold">{fmtDate(item.harvestDate)}</div></div>
           <div><div className="text-xs mb-1" style={{ color: "var(--text-faint)" }}>Quality / Grade</div><Badge tone="green">{item.grade}</Badge></div>
         </div>
-        <div className="p-3 rounded mb-5 text-sm flex items-center gap-2" style={{ background: "var(--primary-soft)", color: "var(--primary-dark)" }}>
+        <div className="p-3 rounded mb-5 text-sm flex items-center gap-2" style={{ background: "var(--primary-soft)", color: "var(--primary-dark)", border: "1px solid var(--primary-soft-border)" }}>
           <ShieldCheck size={16} /> Listed by a verified farmer on BeanLink
         </div>
         <div className="flex gap-3">
           <Field label="Quantity to order (kg)"><input className="agri-input" type="number" defaultValue={Math.min(50, item.quantity)} /></Field>
         </div>
-        <Button className="agri-btn-block mt-4">Place Order</Button>
+        <Button className="agri-btn-block mt-4" onClick={() => push(`Order placed for ${item.variety} Beans`, "green")}>
+          Place Order
+        </Button>
       </div>
     </div>
   );
 }
 
 /* ============================================================================
-   MY PRODUCE + LIST PRODUCE FORM
+   MY PRODUCE + LIST PRODUCE
    ========================================================================== */
 function MyProduce({ goto }) {
   const [tab, setTab] = useState("active");
@@ -1046,7 +1591,14 @@ function MyProduce({ goto }) {
 }
 
 function ListProduceForm({ goto }) {
+  const { push } = useToast();
   const [submitted, setSubmitted] = useState(false);
+
+  const handlePublish = () => {
+    setSubmitted(true);
+    push("Produce listing published", "green");
+  };
+
   if (submitted) {
     return (
       <div className="max-w-lg agri-card p-8 text-center">
@@ -1081,14 +1633,14 @@ function ListProduceForm({ goto }) {
         </div>
         <Field label="Description"><textarea className="agri-textarea" rows={3} placeholder="Describe the beans — cleaning, sorting, storage condition..." /></Field>
         <Field label="Images"><input className="agri-input" type="file" multiple /></Field>
-        <Button className="agri-btn-block" onClick={() => setSubmitted(true)}>Publish Produce Listing</Button>
+        <Button className="agri-btn-block" onClick={handlePublish}>Publish Produce Listing</Button>
       </div>
     </div>
   );
 }
 
 /* ============================================================================
-   MARKET PRICE DASHBOARD (recorded data — never a forecast)
+   MARKET PRICES
    ========================================================================== */
 function MarketPrices({ guest, goto }) {
   const [variety, setVariety] = useState("Rosecoco");
@@ -1107,8 +1659,8 @@ function MarketPrices({ guest, goto }) {
     <div>
       <SectionHeading title="Bean Market Prices" subtitle="View recorded bean prices across selected markets and time periods." />
       {guest && (
-        <div className="p-3 rounded mb-5 text-sm flex items-center gap-2" style={{ background: "var(--amber-soft)", color: "var(--amber)" }}>
-          <Info size={15} /> You're viewing public market data. <button className="font-semibold underline" onClick={() => goto("login")}>Log in</button> to access your farmer or buyer dashboard.
+        <div className="p-3 rounded mb-5 text-sm flex items-center gap-2" style={{ background: "var(--amber-soft)", color: "var(--amber)", border: "1px solid var(--amber-border)" }}>
+          <Info size={15} /> You're viewing public market data. <button className="font-semibold underline" onClick={() => goto("register")}>Register</button> or <button className="font-semibold underline" onClick={() => goto("login")}>Log in</button> to access your farmer or buyer dashboard.
         </div>
       )}
 
@@ -1263,26 +1815,26 @@ function Transactions() {
 /* ============================================================================
    PROFILE
    ========================================================================== */
-function Profile({ role }) {
-  const user = currentUser[role];
+function Profile({ user }) {
+  const { push } = useToast();
   return (
     <div className="max-w-lg">
       <SectionHeading title="Profile" subtitle="Manage your account information." />
       <div className="agri-card p-6">
         <div className="flex items-center gap-4 mb-6">
           <div className="w-14 h-14 rounded-full flex items-center justify-center text-lg font-bold" style={{ background: "var(--primary-soft)", color: "var(--primary-dark)" }}>
-            {user.name.split(" ").map((p) => p[0]).join("").slice(0, 2)}
+            {user.full_name.split(" ").map((p) => p[0]).join("").slice(0, 2)}
           </div>
           <div>
-            <div className="font-bold">{user.name}</div>
-            <div className="text-sm capitalize" style={{ color: "var(--text-muted)" }}>{user.role} · {user.location}</div>
+            <div className="font-bold">{user.full_name}</div>
+            <div className="text-sm capitalize" style={{ color: "var(--text-muted)" }}>{user.role} · {user.county || "—"}</div>
           </div>
         </div>
         <div className="space-y-4">
-          <Field label="Full name"><input className="agri-input" defaultValue={user.name} /></Field>
-          <Field label="Phone number"><input className="agri-input" defaultValue="0712 345 678" /></Field>
-          <Field label="Location"><input className="agri-input" defaultValue={user.location} /></Field>
-          <Button>Save Changes</Button>
+          <Field label="Full name"><input className="agri-input" defaultValue={user.full_name} /></Field>
+          <Field label="Phone number"><input className="agri-input" defaultValue={user.phone_number || ""} /></Field>
+          <Field label="County"><input className="agri-input" defaultValue={user.county || ""} /></Field>
+          <Button onClick={() => push("Profile changes saved", "green")}>Save Changes</Button>
         </div>
       </div>
     </div>
@@ -1290,7 +1842,7 @@ function Profile({ role }) {
 }
 
 /* ============================================================================
-   ADMIN: DASHBOARD, USERS, MARKET PRICE DATA MANAGEMENT, REPORTS
+   ADMIN
    ========================================================================== */
 function AdminDashboard({ goto }) {
   return (
@@ -1328,6 +1880,7 @@ function AdminDashboard({ goto }) {
 }
 
 function AdminUsers() {
+  const { push } = useToast();
   const [filter, setFilter] = useState("all");
   const rows = filter === "all" ? adminUsers : adminUsers.filter((u) => u.role === filter);
   return (
@@ -1351,7 +1904,11 @@ function AdminUsers() {
                   <td>{u.location}</td>
                   <td>{fmtDate(u.joined)}</td>
                   <td><Badge tone={statusTone(u.status)}>{u.status}</Badge></td>
-                  <td>{u.status === "Pending" ? <Button size="sm" icon={ShieldCheck}>Verify</Button> : <Button size="sm" variant="ghost">Manage</Button>}</td>
+                  <td>
+                    {u.status === "Pending"
+                      ? <Button size="sm" icon={ShieldCheck} onClick={() => push(`${u.name} verified`, "green")}>Verify</Button>
+                      : <Button size="sm" variant="ghost" onClick={() => push(`Managing ${u.name}`, "amber")}>Manage</Button>}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -1363,14 +1920,19 @@ function AdminUsers() {
 }
 
 function AdminMarketPrices() {
+  const { push } = useToast();
   const [rows, setRows] = useState(marketPriceHistory);
   const [form, setForm] = useState({ market: "", county: "", variety: "Rosecoco", price: "", unit: "Per kg", date: "", source: "", notes: "" });
   const update = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
   const addRecord = () => {
-    if (!form.market || !form.price || !form.date) return;
+    if (!form.market || !form.price || !form.date) {
+      push("Please fill market, price, and date", "amber");
+      return;
+    }
     setRows((r) => [...r, { date: form.date, variety: form.variety, market: form.market, county: form.county, price: Number(form.price), source: form.source || "Manual entry" }]);
     setForm({ market: "", county: "", variety: "Rosecoco", price: "", unit: "Per kg", date: "", source: "", notes: "" });
+    push("Price record saved", "green");
   };
 
   return (
@@ -1450,21 +2012,12 @@ function AdminReports() {
 }
 
 /* ============================================================================
-   GUEST WRAPPER (public marketplace/prices preview before login)
+   GUEST WRAPPER
    ========================================================================== */
-function GuestPage({ children, goto }) {
+function GuestPage({ children, page, goto, goLogin, goRegister }) {
   return (
     <div className="agri-root min-h-screen">
-      <header className="border-b px-5 py-3.5 flex items-center justify-between sticky top-0 z-10" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-        <button className="flex items-center gap-2 font-bold" onClick={() => goto("landing")}>
-          <div className="w-7 h-7 flex items-center justify-center rounded" style={{ background: "var(--primary)" }}><Sprout size={15} color="#fff" /></div>
-          BeanLink
-        </button>
-        <div className="flex items-center gap-3">
-          <button className="text-sm font-semibold" onClick={() => goto("login")}>Login</button>
-          <Button size="sm" onClick={() => goto("login")}>Register</Button>
-        </div>
-      </header>
+      <GuestHeader page={page} goto={goto} goLogin={goLogin} goRegister={goRegister} />
       <div className="max-w-6xl mx-auto p-4 md:p-7">{children}</div>
     </div>
   );
@@ -1474,40 +2027,92 @@ function GuestPage({ children, goto }) {
    ROOT APP
    ========================================================================== */
 export default function App() {
-  const [session, setSession] = useState(null); // 'farmer' | 'buyer' | 'admin' | null
+  const [session, setSession] = useState(null);
   const [page, setPage] = useState("landing");
   const [authMode, setAuthMode] = useState("login");
   const [selectedItem, setSelectedItem] = useState(null);
 
+  useEffect(() => {
+    const token = localStorage.getItem("beanlink_token");
+    const storedUser = localStorage.getItem("beanlink_user");
+    if (token && storedUser) {
+      setSession(JSON.parse(storedUser));
+      setPage("dashboard");
+    }
+  }, []);
+
   const goto = (p, item) => {
-    setPage(p);
+    if (p === "register") {
+      setAuthMode("register");
+      setPage("login");
+    } else if (p === "login") {
+      setAuthMode("login");
+      setPage("login");
+    } else {
+      setPage(p);
+    }
     setSelectedItem(item || null);
     window.scrollTo?.(0, 0);
   };
 
-  const handleLogin = (role) => {
-    setSession(role);
+  const goLogin = () => goto("login");
+  const goRegister = () => goto("register");
+
+  const handleLogin = (user) => {
+    setSession(user);
     setPage("dashboard");
   };
+
   const handleLogout = () => {
+    localStorage.removeItem("beanlink_token");
+    localStorage.removeItem("beanlink_user");
     setSession(null);
     setPage("landing");
   };
 
+  // Guest (unauthenticated) routes
   if (!session) {
-    if (page === "login") return <><GlobalStyle /><Login goto={goto} onLogin={handleLogin} mode={authMode} setMode={setAuthMode} /></>;
-    if (page === "guest-produce") return <><GlobalStyle /><GuestPage goto={goto}><ProduceMarketplace goto={goto} /></GuestPage></>;
-    if (page === "guest-prices") return <><GlobalStyle /><GuestPage goto={goto}><MarketPrices guest goto={goto} /></GuestPage></>;
-    return <><GlobalStyle /><Landing goto={goto} /></>;
+    let guestContent = null;
+
+    if (page === "landing") {
+      guestContent = <Landing goto={goto} goLogin={goLogin} goRegister={goRegister} />;
+    } else if (page === "login") {
+      guestContent = <Login goto={goto} onLogin={handleLogin} mode={authMode} setMode={setAuthMode} />;
+    } else if (page === "about") {
+      guestContent = <AboutPage goto={goto} goLogin={goLogin} goRegister={goRegister} />;
+    } else if (page === "guest-produce") {
+      guestContent = (
+        <GuestPage page="guest-produce" goto={goto} goLogin={goLogin} goRegister={goRegister}>
+          <ProduceMarketplace goto={goto} />
+        </GuestPage>
+      );
+    } else if (page === "guest-prices") {
+      guestContent = (
+        <GuestPage page="guest-prices" goto={goto} goLogin={goLogin} goRegister={goRegister}>
+          <MarketPrices guest goto={goto} />
+        </GuestPage>
+      );
+    } else {
+      guestContent = <Landing goto={goto} goLogin={goLogin} goRegister={goRegister} />;
+    }
+
+    return (
+      <ToastHost>
+        <GlobalStyle />
+        {guestContent}
+      </ToastHost>
+    );
   }
 
-  const role = session;
+  // Authenticated routes
+  const role = session.role;
 
   const renderPage = () => {
     switch (page) {
       case "dashboard":
-        if (role === "farmer") return <FarmerDashboard goto={goto} />;
-        if (role === "buyer") return <BuyerDashboard goto={goto} />;
+        if (role === "farmer") return <FarmerDashboard goto={goto} user={session} />;
+        if (role === "buyer") return <BuyerDashboard goto={goto} user={session} />;
+        if (role === "supplier") return <SupplierDashboard goto={goto} user={session} />;
         return <AdminDashboard goto={goto} />;
       case "recommendation": return <InputRecommendation />;
       case "input-marketplace": return <InputMarketplace goto={goto} />;
@@ -1519,23 +2124,24 @@ export default function App() {
       case "prices": return <MarketPrices goto={goto} />;
       case "orders": return <Orders />;
       case "transactions": return <Transactions />;
-      case "profile": return <Profile role={role} />;
+      case "profile": return <Profile user={session} />;
       case "admin-users": return <AdminUsers />;
       case "admin-prices": return <AdminMarketPrices />;
       case "admin-reports": return <AdminReports />;
       default:
-        if (role === "farmer") return <FarmerDashboard goto={goto} />;
-        if (role === "buyer") return <BuyerDashboard goto={goto} />;
+        if (role === "farmer") return <FarmerDashboard goto={goto} user={session} />;
+        if (role === "buyer") return <BuyerDashboard goto={goto} user={session} />;
+        if (role === "supplier") return <SupplierDashboard goto={goto} user={session} />;
         return <AdminDashboard goto={goto} />;
     }
   };
 
   return (
-    <>
+    <ToastHost>
       <GlobalStyle />
-      <AppShell role={role} page={page} goto={goto} onLogout={handleLogout}>
+      <AppShell role={role} user={session} page={page} goto={goto} onLogout={handleLogout}>
         {renderPage()}
       </AppShell>
-    </>
+    </ToastHost>
   );
 }
