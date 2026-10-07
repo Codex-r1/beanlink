@@ -119,3 +119,13 @@ export const adminCreatePrice = (payload) =>
 export const adminDeletePrice = (id) =>
   request(`/admin/prices/${id}`, { method: "DELETE" });
 export const adminListReports = () => request("/admin/reports");
+export const getOrder = (id) => request(`/orders/${id}`);
+
+export const setFulfillment = (id, payload) =>
+  request(`/orders/${id}/fulfillment`, { method: "PATCH", body: payload });
+
+export const sellerAdvance = (id, action) =>
+  request(`/orders/${id}/seller-advance`, { method: "PATCH", body: { action } });
+
+export const buyerConfirm = (id, pickup_code) =>
+  request(`/orders/${id}/confirm-receipt`, { method: "PATCH", body: { pickup_code } });

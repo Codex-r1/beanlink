@@ -21,7 +21,7 @@ import {
   adminListUsers, adminVerifyUser,
   adminListPrices, adminCreatePrice,
   adminListReports,
-  initiateMpesaPush, getPaymentStatus
+  initiateMpesaPush, getPaymentStatus,getOrder, setFulfillment, sellerAdvance, buyerConfirm
 } from "./api";
 
 /* ============================================================================
@@ -230,17 +230,22 @@ function ToastHost({ children }) {
    ========================================================================== */
 function PaymentModal({ open, listing, quantity, onClose, onSuccess, goto }) {
   const { push } = useToast();
-  const [stage, setStage] = useState("phone"); // phone | pushing | waiting | success | failed
+  const [stage, setStage] = useState("fulfillment");
+  const [method, setMethod] = useState("pickup");
+  const [address, setAddress] = useState("");
+  const [landmark, setLandmark] = useState("");
   const [phone, setPhone] = useState("");
   const [receipt, setReceipt] = useState(null);
   const [error, setError] = useState("");
   const [orderId, setOrderId] = useState(null);
   const pollRef = React.useRef(null);
 
-  // Reset on open
   useEffect(() => {
     if (open) {
-      setStage("phone");
+      setStage("fulfillment");
+      setMethod("pickup");
+      setAddress("");
+      setLandmark("");
       setPhone("");
       setReceipt(null);
       setError("");
@@ -248,13 +253,21 @@ function PaymentModal({ open, listing, quantity, onClose, onSuccess, goto }) {
     }
   }, [open]);
 
-  // Cleanup poller on unmount / close
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
 
   if (!open) return null;
 
   const validatePhone = (v) => /^254\d{9}$/.test(v) || /^0\d{9}$/.test(v);
   const normalisePhone = (v) => (v.startsWith("0") ? `254${v.slice(1)}` : v);
+
+  const goToPhone = () => {
+    if (method === "delivery" && !address.trim()) {
+      setError("Please enter a delivery address.");
+      return;
+    }
+    setError("");
+    setStage("phone");
+  };
 
   const submit = async () => {
     if (!validatePhone(phone)) {
@@ -270,10 +283,17 @@ function PaymentModal({ open, listing, quantity, onClose, onSuccess, goto }) {
       const txnId = order.order?.txn_id || order.txn_id;
       setOrderId(txnId);
 
-      // 2. Initiate STK push
+      // 2. Persist fulfillment choice
+      await setFulfillment(txnId, {
+        method,
+        address: method === "delivery" ? address : null,
+        landmark: method === "delivery" ? landmark : null,
+      });
+
+      // 3. STK push
       await initiateMpesaPush(txnId, normalisePhone(phone));
 
-      // 3. Poll for status
+      // 4. Poll
       setStage("waiting");
       let elapsed = 0;
       pollRef.current = setInterval(async () => {
@@ -293,9 +313,7 @@ function PaymentModal({ open, listing, quantity, onClose, onSuccess, goto }) {
             setStage("failed");
             setError("Timed out waiting for confirmation. Check your M-Pesa messages.");
           }
-        } catch (err) {
-          // keep polling on transient errors
-        }
+        } catch {}
       }, 3000);
     } catch (err) {
       setStage("phone");
@@ -321,14 +339,7 @@ function PaymentModal({ open, listing, quantity, onClose, onSuccess, goto }) {
       role="dialog"
       aria-modal="true"
     >
-      <div
-        onClick={close}
-        style={{
-          position: "absolute",
-          inset: 0,
-          background: "rgba(15, 25, 18, 0.65)",
-        }}
-      />
+      <div onClick={close} style={{ position: "absolute", inset: 0, background: "rgba(15, 25, 18, 0.65)" }} />
       <div
         className="agri-card relative w-full max-w-md"
         style={{
@@ -339,14 +350,12 @@ function PaymentModal({ open, listing, quantity, onClose, onSuccess, goto }) {
       >
         <div className="p-5">
           <div className="flex items-start gap-3 mb-4">
-            <div
-              className="w-10 h-10 rounded flex items-center justify-center shrink-0"
-              style={{ background: "var(--primary-soft)" }}
-            >
+            <div className="w-10 h-10 rounded flex items-center justify-center shrink-0" style={{ background: "var(--primary-soft)" }}>
               <Receipt size={20} style={{ color: "var(--primary)" }} />
             </div>
             <div className="min-w-0 flex-1">
               <h3 className="font-semibold text-base mb-0.5">
+                {stage === "fulfillment" && "How would you like to receive this?"}
                 {stage === "phone" && "Pay with M-Pesa"}
                 {stage === "pushing" && "Sending request…"}
                 {stage === "waiting" && "Waiting for you to confirm"}
@@ -360,12 +369,66 @@ function PaymentModal({ open, listing, quantity, onClose, onSuccess, goto }) {
             </div>
           </div>
 
+          {stage === "fulfillment" && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { id: "pickup", label: "Pickup", icon: MapPin, desc: "Collect from the seller" },
+                  { id: "delivery", label: "Delivery", icon: Package, desc: "Sent to your address" },
+                ].map((opt) => {
+                  const active = method === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      onClick={() => setMethod(opt.id)}
+                      className="agri-card p-3 text-left"
+                      style={{
+                        borderColor: active ? "var(--primary)" : "var(--border)",
+                        background: active ? "var(--primary-soft)" : "var(--surface)",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <opt.icon size={16} style={{ color: active ? "var(--primary)" : "var(--text-muted)" }} />
+                      <div className="font-semibold text-sm mt-1.5">{opt.label}</div>
+                      <div className="text-xs" style={{ color: "var(--text-muted)" }}>{opt.desc}</div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {method === "delivery" && (
+                <>
+                  <Field label="Delivery address" hint="Street, estate, or building.">
+                    <input
+                      className="agri-input"
+                      value={address}
+                      onChange={(e) => setAddress(e.target.value)}
+                      placeholder="e.g. Ngong Road, Kilimani"
+                    />
+                  </Field>
+                  <Field label="Landmark (optional)">
+                    <input
+                      className="agri-input"
+                      value={landmark}
+                      onChange={(e) => setLandmark(e.target.value)}
+                      placeholder="e.g. Next to Yaya Centre"
+                    />
+                  </Field>
+                </>
+              )}
+
+              {error && (
+                <div className="text-sm p-2.5 rounded"
+                     style={{ background: "var(--red-soft)", color: "var(--red)", border: "1px solid var(--red-border)" }}>
+                  {error}
+                </div>
+              )}
+            </div>
+          )}
+
           {stage === "phone" && (
             <div className="space-y-3">
-              <Field
-                label="M-Pesa phone number"
-                hint="You will receive a prompt on your phone to enter your M-Pesa PIN."
-              >
+              <Field label="M-Pesa phone number" hint="You'll receive a prompt to enter your PIN.">
                 <input
                   className="agri-input"
                   value={phone}
@@ -375,20 +438,14 @@ function PaymentModal({ open, listing, quantity, onClose, onSuccess, goto }) {
                 />
               </Field>
               {error && (
-                <div
-                  className="text-sm p-2.5 rounded"
-                  style={{
-                    background: "var(--red-soft)",
-                    color: "var(--red)",
-                    border: "1px solid var(--red-border)",
-                  }}
-                >
+                <div className="text-sm p-2.5 rounded"
+                     style={{ background: "var(--red-soft)", color: "var(--red)", border: "1px solid var(--red-border)" }}>
                   {error}
                 </div>
               )}
               <div className="p-3 rounded text-xs"
                    style={{ background: "var(--surface-alt)", color: "var(--text-muted)" }}>
-                Total to pay:{" "}
+                Total:{" "}
                 <strong style={{ color: "var(--text)" }}>
                   {fmtKES(Number(listing.price_per_unit) * Number(quantity))}
                 </strong>
@@ -405,10 +462,7 @@ function PaymentModal({ open, listing, quantity, onClose, onSuccess, goto }) {
 
           {stage === "waiting" && (
             <div className="space-y-3 text-sm" style={{ color: "var(--text-muted)" }}>
-              <p>
-                Check your phone. Enter your M-Pesa PIN on the prompt that just
-                appeared.
-              </p>
+              <p>Check your phone. Enter your M-Pesa PIN on the prompt that just appeared.</p>
               <div className="flex items-center gap-2 text-xs">
                 <div className="w-2 h-2 rounded-full" style={{ background: "var(--amber)" }} />
                 <span>Waiting for confirmation… this can take up to 30 seconds.</span>
@@ -418,56 +472,42 @@ function PaymentModal({ open, listing, quantity, onClose, onSuccess, goto }) {
 
           {stage === "success" && (
             <div className="space-y-3 text-sm">
-              <div
-                className="p-3 rounded flex items-start gap-2"
-                style={{
-                  background: "var(--primary-soft)",
-                  border: "1px solid var(--primary-soft-border)",
-                  color: "var(--primary-dark)",
-                }}
-              >
+              <div className="p-3 rounded flex items-start gap-2"
+                   style={{ background: "var(--primary-soft)", border: "1px solid var(--primary-soft-border)", color: "var(--primary-dark)" }}>
                 <CheckCircle2 size={16} className="shrink-0 mt-0.5" />
                 <div>
                   <div className="font-semibold mb-0.5">Order confirmed</div>
-                  <div className="text-xs">
-                    Receipt: <span className="mono">{receipt}</span>
-                  </div>
+                  <div className="text-xs">Receipt: <span className="mono">{receipt}</span></div>
                 </div>
               </div>
               <p style={{ color: "var(--text-muted)" }}>
-                The seller has been notified. You can track this order in Orders.
+                The seller has been notified. Track this order from the Orders page.
               </p>
             </div>
           )}
 
           {stage === "failed" && (
-            <div className="text-sm" style={{ color: "var(--text-muted)" }}>
-              {error}
-            </div>
+            <div className="text-sm" style={{ color: "var(--text-muted)" }}>{error}</div>
           )}
         </div>
 
-        <div
-          className="px-5 py-3 border-t flex justify-end gap-2"
-          style={{ borderColor: "var(--border)", background: "#FBFBF8" }}
-        >
-          {stage === "phone" && (
+        <div className="px-5 py-3 border-t flex justify-end gap-2"
+             style={{ borderColor: "var(--border)", background: "#FBFBF8" }}>
+          {stage === "fulfillment" && (
             <>
               <Button variant="secondary" size="sm" onClick={close}>Cancel</Button>
+              <Button size="sm" onClick={goToPhone}>Continue</Button>
+            </>
+          )}
+          {stage === "phone" && (
+            <>
+              <Button variant="secondary" size="sm" onClick={() => setStage("fulfillment")}>Back</Button>
               <Button size="sm" onClick={submit}>Send STK push</Button>
             </>
           )}
-          {stage === "pushing" && (
-            <Button variant="secondary" size="sm" disabled>Please wait…</Button>
-          )}
-          {stage === "waiting" && (
-            <Button variant="secondary" size="sm" onClick={close}>
-              I'll confirm later
-            </Button>
-          )}
-          {stage === "success" && (
-            <Button size="sm" onClick={done}>View my orders</Button>
-          )}
+          {stage === "pushing" && <Button variant="secondary" size="sm" disabled>Please wait…</Button>}
+          {stage === "waiting" && <Button variant="secondary" size="sm" onClick={close}>I'll confirm later</Button>}
+          {stage === "success" && <Button size="sm" onClick={done}>View my orders</Button>}
           {stage === "failed" && (
             <>
               <Button variant="secondary" size="sm" onClick={close}>Close</Button>
@@ -2233,7 +2273,277 @@ function ProduceDetail({ item, goto, guest = false }) {
     </div>
   );
 }
+/* ============================================================================
+   ORDER DETAIL — full post-payment tracking and fulfillment
+   ========================================================================== */
+function OrderDetail({ orderId, goto, user }) {
+  const { push } = useToast();
+  const { confirm, open } = useModal();
+  const [order, setOrder] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [pickupInput, setPickupInput] = useState("");
+  const [working, setWorking] = useState(false);
 
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await getOrder(orderId);
+      setOrder(data.order);
+    } catch (err) {
+      push(err.message || "Failed to load order", "red");
+    } finally {
+      setLoading(false);
+    }
+  }, [orderId, push]);
+
+  useEffect(() => { load(); }, [load]);
+
+  if (loading) return <PageSkeleton rows={2} />;
+  if (!order) return null;
+
+  const isBuyer = order.buyer_id === user.user_id;
+  const isSeller = order.seller_id === user.user_id;
+
+  const methodLabel = order.fulfillment_method === "delivery" ? "Delivery" : "Pickup";
+  const statusLabels = {
+    awaiting_seller: "Awaiting seller",
+    ready_for_pickup: "Ready for pickup",
+    dispatched: "Dispatched",
+    delivered: "Delivered",
+    issue: "Issue reported",
+  };
+  const statusLabel = statusLabels[order.fulfillment_status] || order.fulfillment_status;
+
+  const sellerAction = async (action, label, confirmOpts) => {
+    const ok = await confirm(confirmOpts || {
+      tone: "info",
+      title: label,
+      body: "Are you sure?",
+      confirmLabel: "Yes",
+      cancelLabel: "Cancel",
+    });
+    if (!ok) return;
+    setWorking(true);
+    try {
+      await sellerAdvance(order.txn_id, action);
+      push(`Order marked as ${action.replace(/_/g, " ")}`, "green");
+      load();
+    } catch (err) {
+      push(err.message || "Failed to update", "red");
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  const confirmReceipt = async () => {
+    setWorking(true);
+    try {
+      await buyerConfirm(order.txn_id, order.fulfillment_method === "pickup" ? pickupInput : null);
+      open({
+        tone: "success",
+        title: "Receipt confirmed",
+        body: "Order marked as delivered. Thank you for using BeanLink.",
+        confirmLabel: "Done",
+      });
+      load();
+    } catch (err) {
+      push(err.message || "Failed to confirm receipt", "red");
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  return (
+    <div className="max-w-2xl">
+      <button
+        className="flex items-center gap-1 text-sm mb-5"
+        style={{ color: "var(--text-muted)" }}
+        onClick={() => goto("orders")}
+      >
+        <ArrowLeft size={15} /> Back to Orders
+      </button>
+
+      <SectionHeading
+        eyebrow={`ORD-${order.txn_id}`}
+        title={order.title || beanLabel(order.variety)}
+        subtitle={`Placed ${fmtDate(order.created_at)}`}
+      />
+
+      {/* Payment summary */}
+      <div className="agri-card p-5 mb-4">
+        <h3 className="font-semibold mb-4">Payment</h3>
+        <div className="grid grid-cols-2 gap-4 text-sm">
+          <div>
+            <div className="text-xs mb-1" style={{ color: "var(--text-faint)" }}>Amount</div>
+            <div className="mono font-bold">{fmtKES(order.total_amount)}</div>
+          </div>
+          <div>
+            <div className="text-xs mb-1" style={{ color: "var(--text-faint)" }}>Status</div>
+            <Badge tone={order.payment_status === "paid" ? "green" : "amber"}>
+              {order.payment_status || order.status}
+            </Badge>
+          </div>
+          <div>
+            <div className="text-xs mb-1" style={{ color: "var(--text-faint)" }}>Quantity</div>
+            <div className="font-semibold">{Number(order.quantity)}</div>
+          </div>
+          <div>
+            <div className="text-xs mb-1" style={{ color: "var(--text-faint)" }}>M-Pesa receipt</div>
+            <div className="mono font-semibold">{order.mpesa_receipt || "—"}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Fulfillment summary */}
+      <div className="agri-card p-5 mb-4">
+        <h3 className="font-semibold mb-4">Fulfillment</h3>
+
+        <div className="grid grid-cols-2 gap-4 text-sm mb-4">
+          <div>
+            <div className="text-xs mb-1" style={{ color: "var(--text-faint)" }}>Method</div>
+            <div className="font-semibold">{methodLabel}</div>
+          </div>
+          <div>
+            <div className="text-xs mb-1" style={{ color: "var(--text-faint)" }}>Status</div>
+            <Badge tone={order.fulfillment_status === "delivered" ? "green" : "blue"}>
+              {statusLabel}
+            </Badge>
+          </div>
+          {order.fulfillment_method === "pickup" && (
+            <div className="col-span-2">
+              <div className="text-xs mb-1" style={{ color: "var(--text-faint)" }}>Pickup from</div>
+              <div className="font-semibold flex items-center gap-1">
+                <MapPin size={13} />{order.location || "—"}
+              </div>
+            </div>
+          )}
+          {order.fulfillment_method === "delivery" && (
+            <>
+              <div className="col-span-2">
+                <div className="text-xs mb-1" style={{ color: "var(--text-faint)" }}>Delivery address</div>
+                <div className="font-semibold">{order.delivery_address || "—"}</div>
+              </div>
+              {order.delivery_landmark && (
+                <div className="col-span-2">
+                  <div className="text-xs mb-1" style={{ color: "var(--text-faint)" }}>Landmark</div>
+                  <div>{order.delivery_landmark}</div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Counterparty */}
+        <div className="p-3 rounded mb-4"
+             style={{ background: "var(--surface-alt)", fontSize: 13 }}>
+          <div className="text-xs mb-0.5" style={{ color: "var(--text-faint)" }}>
+            {isBuyer ? "Seller" : "Buyer"}
+          </div>
+          <div className="font-semibold">
+            {isBuyer ? order.seller_name : order.buyer_name}
+          </div>
+          <div className="mono text-xs" style={{ color: "var(--text-muted)" }}>
+            {isBuyer ? order.seller_phone : order.buyer_phone || "—"}
+          </div>
+        </div>
+
+        {/* Pickup code display for buyer */}
+        {order.fulfillment_method === "pickup"
+          && order.pickup_code
+          && isBuyer
+          && order.fulfillment_status !== "delivered" && (
+          <div className="p-4 rounded mb-4"
+               style={{ background: "var(--primary-soft)", border: "1px solid var(--primary-soft-border)" }}>
+            <div className="text-xs font-semibold uppercase tracking-wide mb-1"
+                 style={{ color: "var(--primary)" }}>
+              Pickup code — show this to the seller
+            </div>
+            <div className="mono text-3xl font-bold" style={{ color: "var(--primary-dark)", letterSpacing: 4 }}>
+              {order.pickup_code}
+            </div>
+          </div>
+        )}
+
+        {/* Seller actions */}
+        {isSeller && order.fulfillment_status === "awaiting_seller" && (
+          <div className="flex gap-2">
+            {order.fulfillment_method === "pickup" ? (
+              <Button
+                className="agri-btn-block"
+                disabled={working}
+                onClick={() => sellerAction("ready_for_pickup", "Mark ready for pickup?", {
+                  tone: "info",
+                  title: "Mark ready for pickup?",
+                  body: "The buyer will see a pickup code they'll show you on collection.",
+                  confirmLabel: "Mark ready",
+                  cancelLabel: "Cancel",
+                })}
+              >
+                Mark ready for pickup
+              </Button>
+            ) : (
+              <Button
+                className="agri-btn-block"
+                disabled={working}
+                onClick={() => sellerAction("dispatched", "Mark as dispatched?", {
+                  tone: "info",
+                  title: "Mark as dispatched?",
+                  body: "The buyer will be notified that the order is on the way.",
+                  confirmLabel: "Mark dispatched",
+                  cancelLabel: "Cancel",
+                })}
+              >
+                Mark as dispatched
+              </Button>
+            )}
+          </div>
+        )}
+
+        {/* Buyer confirmation */}
+        {isBuyer && order.fulfillment_status !== "delivered" && (
+          <div className="space-y-3 mt-4">
+            {order.fulfillment_method === "pickup" && order.fulfillment_status === "ready_for_pickup" && (
+              <>
+                <Field label="Enter the pickup code to confirm collection">
+                  <input
+                    className="agri-input mono"
+                    value={pickupInput}
+                    onChange={(e) => setPickupInput(e.target.value.toUpperCase())}
+                    placeholder="e.g. A3K9P2"
+                    maxLength={6}
+                  />
+                </Field>
+                <Button className="agri-btn-block" disabled={working || pickupInput.length < 4} onClick={confirmReceipt}>
+                  {working ? "Confirming…" : "Confirm receipt"}
+                </Button>
+              </>
+            )}
+            {order.fulfillment_method === "delivery" && order.fulfillment_status === "dispatched" && (
+              <Button className="agri-btn-block" disabled={working} onClick={confirmReceipt}>
+                {working ? "Confirming…" : "Confirm delivery received"}
+              </Button>
+            )}
+            {order.fulfillment_status === "awaiting_seller" && (
+              <div className="text-xs text-center" style={{ color: "var(--text-faint)" }}>
+                {order.fulfillment_method === "pickup"
+                  ? "Waiting for the seller to prepare your order."
+                  : "Waiting for the seller to dispatch your order."}
+              </div>
+            )}
+          </div>
+        )}
+
+        {order.fulfillment_status === "delivered" && (
+          <div className="p-3 rounded text-sm flex items-center gap-2 mt-4"
+               style={{ background: "var(--primary-soft)", border: "1px solid var(--primary-soft-border)", color: "var(--primary-dark)" }}>
+            <CheckCircle2 size={16} />
+            Delivered {fmtDate(order.delivered_at)}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 /* ============================================================================
    MY PRODUCE
    ========================================================================== */
@@ -2768,30 +3078,24 @@ function Orders() {
               <thead>
                 <tr><th>Order ID</th><th>Item</th><th>Counterparty</th><th>Quantity</th><th>Amount</th><th>Date</th><th>Status</th><th></th></tr>
               </thead>
-              <tbody>
-                {rows.map((o) => (
-                  <tr key={o.id}>
-                    <td className="mono">{o.id}</td>
-                    <td className="font-medium">{o.item}</td>
-                    <td>{o.counterparty}</td>
-                    <td className="mono">{o.quantity}</td>
-                    <td className="mono font-semibold">{fmtKES(o.amount)}</td>
-                    <td>{fmtDate(o.date)}</td>
-                    <td><Badge tone={statusTone(o.status)}>{o.status}</Badge></td>
-                    <td>
-                      {o.status === "Pending" && (
-                        <Button size="sm" variant="ghost" onClick={() => updateStatus(o.id.replace("ORD-", ""), "confirmed")}>Confirm</Button>
-                      )}
-                      {o.status === "Confirmed" && (
-                        <Button size="sm" variant="ghost" onClick={() => updateStatus(o.id.replace("ORD-", ""), "processing")}>Process</Button>
-                      )}
-                      {o.status === "Processing" && (
-                        <Button size="sm" variant="ghost" onClick={() => updateStatus(o.id.replace("ORD-", ""), "completed")}>Complete</Button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
+             <tbody>
+  {rows.map((o) => (
+    <tr key={o.id}
+        style={{ cursor: "pointer" }}
+        onClick={() => goto("order-detail", { orderId: o.rawId })}>
+      <td className="mono">{o.id}</td>
+      <td className="font-medium">{o.item}</td>
+      <td>{o.counterparty}</td>
+      <td className="mono">{o.quantity}</td>
+      <td className="mono font-semibold">{fmtKES(o.amount)}</td>
+      <td>{fmtDate(o.date)}</td>
+      <td><Badge tone={statusTone(o.status)}>{o.status}</Badge></td>
+      <td onClick={(e) => e.stopPropagation()}>
+        {/* existing buttons */}
+      </td>
+    </tr>
+  ))}
+</tbody>
             </table>
           </div>
         </div>
@@ -3394,6 +3698,9 @@ export default function App() {
         <ProduceDetail item={selectedItem} goto={goto} guest />
       </GuestPage>
     );
+    } else if (page === "order-detail") {
+  guestContent = <Landing goto={goto} goLogin={goLogin} goRegister={goRegister} />;
+}
   } else {
     guestContent = <Landing goto={goto} goLogin={goLogin} goRegister={goRegister} />;
   }
@@ -3431,6 +3738,13 @@ case "list-input":    return <ListForm goto={goto} role="supplier" />;
       case "admin-users": return <AdminUsers />;
       case "admin-prices": return <AdminMarketPrices />;
       case "admin-reports": return <AdminReports />;
+      case "order-detail": return (
+  <OrderDetail
+    orderId={selectedItem?.orderId}
+    goto={goto}
+    user={session}
+  />
+);
       default:
         if (role === "farmer") return <FarmerDashboard goto={goto} user={session} />;
         if (role === "buyer") return <BuyerDashboard goto={goto} user={session} />;
@@ -3449,4 +3763,4 @@ case "list-input":    return <ListForm goto={goto} role="supplier" />;
       </ModalHost>
     </ToastHost>
   );
-}
+

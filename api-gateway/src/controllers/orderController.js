@@ -1,7 +1,140 @@
 const pool = require('../config/db');
 
 const VALID_STATUSES = ['pending', 'confirmed', 'processing', 'completed', 'cancelled'];
+const VALID_METHODS = ['pickup', 'delivery'];
 
+exports.setFulfillment = async (req, res) => {
+  const userId = req.user.user_id;
+  const { method, address, landmark } = req.body;
+
+  if (!VALID_METHODS.includes(method)) {
+    return res.status(400).json({ error: 'Invalid fulfillment method' });
+  }
+  if (method === 'delivery' && !address) {
+    return res.status(400).json({ error: 'Delivery address is required' });
+  }
+
+  try {
+    const { rows } = await pool.query(
+      `UPDATE transactions
+          SET fulfillment_method = $1,
+              delivery_address = $2,
+              delivery_landmark = $3
+        WHERE txn_id = $4 AND buyer_id = $5 AND status = 'pending'
+        RETURNING txn_id, fulfillment_method, delivery_address, delivery_landmark`,
+      [method, address || null, landmark || null, req.params.id, userId]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Order not found, not yours, or already paid' });
+    }
+    res.json({ order: rows[0] });
+  } catch (err) {
+    console.error('setFulfillment', err);
+    res.status(500).json({ error: 'Failed to save fulfillment details' });
+  }
+};
+const generatePickupCode = () => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no I/O/0/1
+  let code = '';
+  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  return code;
+};
+
+exports.sellerAdvance = async (req, res) => {
+  const userId = req.user.user_id;
+  const { action } = req.body; // 'ready_for_pickup' | 'dispatched' | 'issue'
+
+  const allowed = ['ready_for_pickup', 'dispatched', 'issue'];
+  if (!allowed.includes(action)) {
+    return res.status(400).json({ error: 'Invalid action' });
+  }
+
+  try {
+    // Verify the caller is the seller for this order
+    const check = await pool.query(
+      `SELECT t.txn_id, t.fulfillment_method
+         FROM transactions t
+         JOIN order_items oi ON oi.txn_id = t.txn_id
+         JOIN listings l ON l.listing_id = oi.listing_id
+        WHERE t.txn_id = $1 AND l.seller_id = $2`,
+      [req.params.id, userId]
+    );
+    if (check.rows.length === 0) {
+      return res.status(404).json({ error: 'Order not found or not yours' });
+    }
+
+    const method = check.rows[0].fulfillment_method;
+    let pickupCode = null;
+    let dispatchedAt = null;
+
+    if (action === 'ready_for_pickup') {
+      if (method !== 'pickup') return res.status(400).json({ error: 'Order is not a pickup order' });
+      // Only generate once
+      const { rows: [existing] } = await pool.query(
+        `SELECT pickup_code FROM transactions WHERE txn_id = $1`,
+        [req.params.id]
+      );
+      pickupCode = existing.pickup_code || generatePickupCode();
+    } else if (action === 'dispatched') {
+      if (method !== 'delivery') return res.status(400).json({ error: 'Order is not a delivery order' });
+      dispatchedAt = new Date();
+    }
+
+    const { rows } = await pool.query(
+      `UPDATE transactions
+          SET fulfillment_status = $1::fulfillment_status_enum,
+              pickup_code = COALESCE($2, pickup_code),
+              dispatched_at = COALESCE($3, dispatched_at)
+        WHERE txn_id = $4
+        RETURNING txn_id, fulfillment_status, pickup_code, dispatched_at`,
+      [action, pickupCode, dispatchedAt, req.params.id]
+    );
+
+    res.json({ order: rows[0] });
+  } catch (err) {
+    console.error('sellerAdvance', err);
+    res.status(500).json({ error: 'Failed to update fulfillment' });
+  }
+};
+exports.buyerConfirm = async (req, res) => {
+  const userId = req.user.user_id;
+  const { pickup_code } = req.body;
+
+  try {
+    const { rows: [order] } = await pool.query(
+      `SELECT txn_id, fulfillment_method, fulfillment_status, pickup_code
+         FROM transactions
+        WHERE txn_id = $1 AND buyer_id = $2`,
+      [req.params.id, userId]
+    );
+    if (!order) return res.status(404).json({ error: 'Order not found or not yours' });
+
+    if (order.fulfillment_method === 'pickup') {
+      if (!pickup_code || pickup_code.toUpperCase() !== (order.pickup_code || '').toUpperCase()) {
+        return res.status(400).json({ error: 'Incorrect pickup code' });
+      }
+    } else {
+      if (order.fulfillment_status !== 'dispatched') {
+        return res.status(400).json({ error: 'Order has not been dispatched yet' });
+      }
+    }
+
+    const { rows } = await pool.query(
+      `UPDATE transactions
+          SET fulfillment_status = 'delivered',
+              delivered_at = now(),
+              status = 'completed'
+        WHERE txn_id = $1
+        RETURNING txn_id, fulfillment_status, delivered_at, status`,
+      [req.params.id]
+    );
+
+    res.json({ order: rows[0] });
+  } catch (err) {
+    console.error('buyerConfirm', err);
+    res.status(500).json({ error: 'Failed to confirm receipt' });
+  }
+};
 // GET /api/orders?role=seller|buyer|all&status=
 exports.getOrders = async (req, res) => {
   const userId = req.user.user_id;
