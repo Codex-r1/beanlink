@@ -3,7 +3,7 @@ const jwt = require('jsonwebtoken');
 const pool = require('../config/db');
 
 const SALT_ROUNDS = 10;
-const VALID_ROLES = ['farmer', 'buyer', 'supplier', 'admin'];
+const VALID_ROLES = ['farmer', 'buyer', 'supplier'];
 
 // POST /auth/register
 async function register(req, res) {

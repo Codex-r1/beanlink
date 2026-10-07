@@ -4,11 +4,18 @@ const cors = require('cors');
 const pool = require('./config/db');
 const authRoutes = require('./routes/auth');
 const authenticateToken = require('./middleware/auth');
-const requireRole = require('./middleware/role');
-
+const requireRole = require('./middleware/requireRole');
+const dashboardRoutes = require('./routes/dashboardRoutes');
+const listingRoutes = require('./routes/listingRoutes');
+const orderRoutes = require('./routes/orderRoutes');
+const priceRoutes = require('./routes/priceRoutes');
+const profileRoutes = require('./routes/profileRoutes');
+const adminRoutes = require('./routes/adminRoutes');
+const paymentRoutes = require('./routes/paymentRoutes');
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use('/api', paymentRoutes);
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'api-gateway' });
@@ -24,9 +31,13 @@ app.get('/health/db', async (req, res) => {
   }
 });
 
-app.use('/auth', authRoutes);
-
-// Example protected route — proves auth + RBAC work end to end
+app.use('/api/auth', authRoutes);
+app.use('/api', dashboardRoutes);
+app.use('/api', listingRoutes);
+app.use('/api', orderRoutes);
+app.use('/api', priceRoutes);
+app.use('/api', profileRoutes);
+app.use('/api', adminRoutes);
 app.get('/farmer/profile', authenticateToken, requireRole('farmer'), async (req, res) => {
   try {
     const result = await pool.query(
@@ -42,6 +53,7 @@ app.get('/farmer/profile', authenticateToken, requireRole('farmer'), async (req,
     res.status(500).json({ error: 'Failed to fetch profile' });
   }
 });
-
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`API Gateway running on port ${PORT}`));
+require('dotenv').config();
+
