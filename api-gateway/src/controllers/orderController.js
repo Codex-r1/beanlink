@@ -152,34 +152,75 @@ exports.getOrders = async (req, res) => {
 
   try {
     const { rows } = await pool.query(
-      `SELECT t.txn_id AS order_id, t.status, t.total_amount AS amount, t.created_at AS date,
-              t.buyer_id, buyer.full_name AS buyer_name,
-              l.listing_id, l.title AS item, l.seller_id, seller.full_name AS seller_name,
-              oi.quantity, oi.unit_price
-         FROM transactions t
-         JOIN order_items oi ON oi.txn_id = t.txn_id
-         JOIN listings l ON l.listing_id = oi.listing_id
-         JOIN users buyer ON buyer.user_id = t.buyer_id
-         JOIN users seller ON seller.user_id = l.seller_id
-        WHERE ${filters.join(' AND ')}
-        ORDER BY t.created_at DESC
-        LIMIT 200`,
+      `SELECT
+         t.txn_id AS order_id,
+         t.status,
+         t.total_amount AS amount,
+         t.created_at AS date,
+         t.fulfillment_method,
+         t.fulfillment_status,
+         t.delivery_address,
+         t.delivery_landmark,
+         t.pickup_code,
+         t.buyer_id,
+         buyer.full_name AS buyer_name,
+         buyer.phone_number AS buyer_phone,
+         buyer.county AS buyer_county,
+         l.listing_id,
+         l.title AS item,
+         l.location AS listing_location,
+         l.seller_id,
+         seller.full_name AS seller_name,
+         seller.phone_number AS seller_phone,
+         seller.county AS seller_county,
+         oi.quantity,
+         oi.unit_price
+       FROM transactions t
+       JOIN order_items oi ON oi.txn_id = t.txn_id
+       JOIN listings l ON l.listing_id = oi.listing_id
+       JOIN users buyer ON buyer.user_id = t.buyer_id
+       JOIN users seller ON seller.user_id = l.seller_id
+      WHERE ${filters.join(' AND ')}
+      ORDER BY t.created_at DESC
+      LIMIT 200`,
       params
     );
 
     res.json({
-      orders: rows.map((r) => ({
-        id: `ORD-${r.order_id}`,
-        rawId: r.order_id,
-        item: r.item,
-        counterparty: r.buyer_id === userId
-          ? `${r.seller_name} (Seller)`
-          : `${r.buyer_name} (Buyer)`,
-        quantity: `${r.quantity} kg`,
-        amount: Number(r.amount),
-        date: r.date,
-        status: r.status.charAt(0).toUpperCase() + r.status.slice(1),
-      })),
+      orders: rows.map((r) => {
+        const iAmBuyer = r.buyer_id === userId;
+        const iAmSeller = r.seller_id === userId;
+
+        return {
+          id: `ORD-${r.order_id}`,
+          rawId: r.order_id,
+          item: r.item,
+          quantity: `${r.quantity} kg`,
+          amount: Number(r.amount),
+          date: r.date,
+          status: r.status.charAt(0).toUpperCase() + r.status.slice(1),
+
+          // Who the caller is for this order — used for role-aware UI
+          myRole: iAmBuyer ? "buyer" : "seller",
+
+          // The other party
+          counterparty: iAmBuyer
+            ? `${r.seller_name} (Seller)`
+            : `${r.buyer_name} (Buyer)`,
+          counterpartyName: iAmBuyer ? r.seller_name : r.buyer_name,
+          counterpartyPhone: iAmBuyer ? r.seller_phone : r.buyer_phone,
+          counterpartyLocation: iAmBuyer
+            ? r.listing_location || r.seller_county
+            : r.buyer_county,
+
+          // Fulfillment
+          fulfillmentMethod: r.fulfillment_method,
+          fulfillmentStatus: r.fulfillment_status,
+          deliveryAddress: r.delivery_address,
+          deliveryLandmark: r.delivery_landmark,
+          pickupCode: r.pickup_code,
+        };
+      }),
     });
   } catch (err) {
     console.error('getOrders', err);

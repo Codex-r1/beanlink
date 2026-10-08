@@ -4,7 +4,7 @@ import {
   User, Search, Bell, Menu, X, ChevronRight, ChevronLeft,
   MapPin, Calendar, CheckCircle2, Clock, AlertCircle, Plus,
   ArrowLeft, LogOut, Users, ShieldCheck, Flag, Leaf, Wheat,
-  Beaker, Tractor, ShieldAlert, PauseCircle, Trash2, Pencil, Info,
+  Beaker, Tractor, ShieldAlert, PauseCircle, Trash2, Pencil, Info
 } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -29,8 +29,6 @@ import {
    ========================================================================== */
 const GlobalStyle = () => (
   <style>{`
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
-
     .agri-root {
       --bg: #F8F8F5;
       --surface: #FFFFFF;
@@ -100,26 +98,25 @@ const GlobalStyle = () => (
     .agri-label { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 6px; display: block; }
     .agri-hint { font-size: 12.5px; color: var(--text-faint); margin-top: 4px; }
 
-    .agri-badge {
-      display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600;
-      padding: 3px 8px 3px 7px; border-radius: 3px; border: 1px solid transparent;
-      border-left-width: 3px;
-    }
-    .agri-badge-green { background: var(--primary-soft); border-color: var(--primary-soft-border); border-left-color: var(--primary); color: var(--primary-dark); }
-    .agri-badge-amber { background: var(--amber-soft); border-color: var(--amber-border); border-left-color: var(--amber); color: var(--amber); }
-    .agri-badge-blue { background: var(--blue-soft); border-color: var(--blue-border); border-left-color: var(--blue); color: var(--blue); }
-    .agri-badge-red { background: var(--red-soft); border-color: var(--red-border); border-left-color: var(--red); color: var(--red); }
-    .agri-badge-gray { background: var(--surface-alt); border-color: var(--border); border-left-color: var(--border-strong); color: var(--text-muted); }
+  .agri-badge {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600;
+  padding: 3px 8px; border-radius: 3px; border: 1px solid transparent;
+}
+.agri-badge-green { background: var(--primary-soft); border-color: var(--primary-soft-border); color: var(--primary-dark); }
+.agri-badge-amber { background: var(--amber-soft); border-color: var(--amber-border); color: var(--amber); }
+.agri-badge-blue  { background: var(--blue-soft); border-color: var(--blue-border); color: var(--blue); }
+.agri-badge-red   { background: var(--red-soft); border-color: var(--red-border); color: var(--red); }
+.agri-badge-gray  { background: var(--surface-alt); border-color: var(--border); color: var(--text-muted); }
 
     .agri-nav-link {
       display: flex; align-items: center; gap: 12px; padding: 9px 14px; border-radius: 4px;
       font-size: 14px; font-weight: 500; color: var(--text-muted); cursor: pointer;
-      border-left: 3px solid transparent; transition: background 0.12s, color 0.12s;
+       transition: background 0.12s, color 0.12s;
     }
     .agri-nav-link:hover { background: var(--surface-alt); color: var(--text); }
     .agri-nav-link.active {
       background: var(--primary-soft); color: var(--primary-dark);
-      border-left-color: var(--primary); font-weight: 600;
+       font-weight: 600;
     }
 
     .agri-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
@@ -149,14 +146,12 @@ const GlobalStyle = () => (
     .agri-scroll::-webkit-scrollbar { height: 6px; width: 6px; }
     .agri-scroll::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
 
-    .agri-stat {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-left: 3px solid var(--primary);
-      border-radius: 6px;
-      box-shadow: 0 1px 2px rgba(26, 29, 26, 0.04);
-    }
-
+   .agri-stat {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 1px 2px rgba(26, 29, 26, 0.04);
+}
     .agri-feature {
       background: var(--surface);
       border: 1px solid var(--border);
@@ -1757,22 +1752,34 @@ function InputRecommendation() {
 /* ============================================================================
    UNIFIED MARKETPLACE — produce + inputs in one browse experience
    ========================================================================== */
+/* ============================================================================
+   UNIFIED MARKETPLACE — produce + inputs + cart drawer
+   ========================================================================== */
 const CATEGORY_FILTERS = [
   { id: "all", label: "All", icon: ShoppingBag },
   ...INPUT_CATEGORIES,
   { id: "produce", label: "Bean Produce", icon: Wheat },
 ];
 
-function Marketplace({ goto }) {
-   const { push } = useToast();
+function Marketplace({ goto, guest = false }) {
+  const { push } = useToast();
   const { confirm } = useModal();
+  
+  // Marketplace states
   const [category, setCategory] = useState("all");
   const [county, setCounty] = useState("all");
   const [variety, setVariety] = useState("all");
   const [sort, setSort] = useState("recent");
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
-  // Reset category-specific filters whenever the category changes
+
+  // Cart state
+  const [cart, setCart] = useState([]);
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [checkoutItem, setCheckoutItem] = useState(null);
+  const [checkoutQty, setCheckoutQty] = useState(1);
+  const [paymentOpen, setPaymentOpen] = useState(false);
+
   useEffect(() => {
     if (category !== "produce" && category !== "all") setVariety("all");
   }, [category]);
@@ -1799,12 +1806,10 @@ function Marketplace({ goto }) {
   }, [category, county, variety, sort, push]);
 
   const showProduceFilters = category === "produce" || category === "all";
-
-  // Counties derived from the currently-returned listings, so the filter
-  // is always populated with options that will actually match.
   const counties = ["all", ...new Set(listings.map((p) => p.location).filter(Boolean))];
 
- const addToCart = async (l) => {
+  // Cart functions
+  const addToCart = async (item) => {
     if (guest) {
       const ok = await confirm({
         tone: "info",
@@ -1816,16 +1821,90 @@ function Marketplace({ goto }) {
       if (ok) goto("login");
       return;
     }
-    push(`${l.title || beanLabel(l.variety)} added to cart`, "green");
-  };
-  return (
-    <div>
-      <SectionHeading
-        title="Marketplace"
-        subtitle="Browse bean produce, seeds, fertilizers, equipment and other farm inputs from verified farmers and suppliers."
-      />
 
-      {/* Category chips */}
+    setCart((prevCart) => {
+      const existingIndex = prevCart.findIndex((i) => i.listing_id === item.listing_id);
+      if (existingIndex > -1) {
+        const updated = [...prevCart];
+        const maxAvail = Number(item.quantity_available);
+        const newQty = updated[existingIndex].cartQuantity + 1;
+        if (newQty > maxAvail) {
+          push(`Maximum available stock reached (${maxAvail})`, "amber");
+          return prevCart;
+        }
+        updated[existingIndex].cartQuantity = newQty;
+        return updated;
+      }
+      return [...prevCart, { ...item, cartQuantity: 1 }];
+    });
+
+    push(`${item.title || beanLabel(item.variety)} added to cart`, "green");
+  };
+
+  const updateCartQuantity = (id, delta) => {
+    setCart((prevCart) =>
+      prevCart
+        .map((item) => {
+          if (item.listing_id === id) {
+            const maxAvail = Number(item.quantity_available);
+            const target = item.cartQuantity + delta;
+            if (target > maxAvail) {
+              push(`Maximum available stock reached (${maxAvail})`, "amber");
+              return item;
+            }
+            return { ...item, cartQuantity: target };
+          }
+          return item;
+        })
+        .filter((item) => item.cartQuantity > 0)
+    );
+  };
+
+  const removeFromCart = (id) => {
+    setCart((prevCart) => prevCart.filter((i) => i.listing_id !== id));
+    push("Item removed from cart", "amber");
+  };
+
+  const cartTotalCount = cart.reduce((acc, item) => acc + item.cartQuantity, 0);
+  const cartTotalPrice = cart.reduce(
+    (acc, item) => acc + Number(item.price_per_unit) * item.cartQuantity,
+    0
+  );
+
+  const startCheckout = (item) => {
+    setCheckoutItem(item);
+    setCheckoutQty(item.cartQuantity);
+    setIsCartOpen(false);
+    setPaymentOpen(true);
+  };
+
+  return (
+    <div className="relative">
+      {/* Top Header Row with Cart Button */}
+      <div className="flex items-center justify-between gap-4 mb-5">
+        <SectionHeading
+          title="Marketplace"
+          subtitle="Browse bean produce, seeds, fertilizers, equipment and other farm inputs from verified farmers and suppliers."
+        />
+        <button
+          onClick={() => setIsCartOpen(true)}
+          className="agri-btn agri-btn-secondary relative shrink-0"
+          aria-label="View Cart"
+        >
+          <ShoppingBag size={18} />
+          <span className="hidden sm:inline">Cart</span>
+          {cartTotalCount > 0 && (
+            <span
+              className="mono text-xs font-bold px-1.5 py-0.5 rounded-full"
+              style={{ background: "var(--red)", color: "#fff", marginLeft: 4 }}
+            >
+              {cartTotalCount}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* Category Chips */}
       <div className="flex gap-2 mb-4 overflow-x-auto agri-scroll pb-1">
         {CATEGORY_FILTERS.map((c) => {
           const active = category === c.id;
@@ -1846,7 +1925,7 @@ function Marketplace({ goto }) {
         })}
       </div>
 
-      {/* Secondary filters */}
+      {/* Filters */}
       <div className="agri-card p-4 mb-5 grid sm:grid-cols-3 gap-3">
         <Field label="County">
           <select className="agri-select" value={county} onChange={(e) => setCounty(e.target.value)}>
@@ -1877,7 +1956,7 @@ function Marketplace({ goto }) {
         </Field>
       </div>
 
-      {/* Results */}
+      {/* Listings Grid */}
       {loading ? (
         <PageSkeleton rows={6} />
       ) : listings.length === 0 ? (
@@ -1890,7 +1969,7 @@ function Marketplace({ goto }) {
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {listings.map((p) => {
             const isProduce = p.category === "produce";
-            const catIcon =
+            const wheat = 
               (isProduce
                 ? Wheat
                 : INPUT_CATEGORIES.find((c) => c.id === p.category)?.icon) || Package;
@@ -1901,13 +1980,12 @@ function Marketplace({ goto }) {
                   className="w-full h-28 rounded mb-3 flex items-center justify-center"
                   style={{ background: "var(--surface-alt)" }}
                 >
-                  <catIcon size={30} color="var(--primary)" />
+                  <Wheat size={30} color="var(--primary)" />
                 </div>
 
                 <div className="mb-1">
                   {isProduce && (
-                    <div className="text-[10px] font-bold uppercase tracking-wider mb-1"
-                         style={{ color: "var(--primary)" }}>
+                    <div className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: "var(--primary)" }}>
                       Bean Produce
                     </div>
                   )}
@@ -1963,6 +2041,120 @@ function Marketplace({ goto }) {
           })}
         </div>
       )}
+
+      {/* Slide-out Cart Drawer Overlay */}
+      {isCartOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end" style={{ background: "rgba(15, 25, 18, 0.5)" }}>
+          <div
+            className="w-full max-w-md h-full flex flex-col p-5 shadow-2xl"
+            style={{ background: "var(--surface)", borderLeft: "1px solid var(--border-strong)" }}
+          >
+            <div className="flex items-center justify-between pb-4 border-b" style={{ borderColor: "var(--border)" }}>
+              <div className="flex items-center gap-2 font-bold text-lg">
+                <ShoppingBag size={20} style={{ color: "var(--primary)" }} /> My Cart ({cartTotalCount})
+              </div>
+              <button onClick={() => setIsCartOpen(false)} aria-label="Close cart">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto py-4 space-y-3 agri-scroll">
+              {cart.length === 0 ? (
+                <div className="text-center py-12 text-sm" style={{ color: "var(--text-muted)" }}>
+                  <Package size={36} className="mx-auto mb-2 opacity-40" />
+                  Your cart is empty.
+                </div>
+              ) : (
+                cart.map((item) => (
+                  <div
+                    key={item.listing_id}
+                    className="p-3 border rounded flex items-center justify-between gap-3"
+                    style={{ borderColor: "var(--border)", background: "#FBFBF8" }}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold text-sm truncate">
+                        {item.category === "produce" ? `${beanShort(item.variety)} Beans` : item.title}
+                      </div>
+                      <div className="text-xs mono" style={{ color: "var(--text-muted)" }}>
+                        {fmtKES(item.price_per_unit)} each
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => updateCartQuantity(item.listing_id, -1)}
+                        className="w-6 h-6 rounded flex items-center justify-center border font-bold text-sm"
+                        style={{ borderColor: "var(--border-strong)" }}
+                      >
+                        -
+                      </button>
+                      <span className="mono text-sm font-semibold">{item.cartQuantity}</span>
+                      <button
+                        onClick={() => updateCartQuantity(item.listing_id, 1)}
+                        className="w-6 h-6 rounded flex items-center justify-center border font-bold text-sm"
+                        style={{ borderColor: "var(--border-strong)" }}
+                      >
+                        +
+                      </button>
+                    </div>
+
+                    <div className="text-right shrink-0">
+                      <div className="mono font-bold text-sm">
+                        {fmtKES(Number(item.price_per_unit) * item.cartQuantity)}
+                      </div>
+                      <button
+                        onClick={() => removeFromCart(item.listing_id)}
+                        className="text-xs hover:underline mt-1"
+                        style={{ color: "var(--red)" }}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {cart.length > 0 && (
+              <div className="pt-4 border-t space-y-3" style={{ borderColor: "var(--border)" }}>
+                <div className="flex items-center justify-between text-base font-bold">
+                  <span>Total</span>
+                  <span className="mono">{fmtKES(cartTotalPrice)}</span>
+                </div>
+                <div className="space-y-2">
+                  {cart.map((item) => (
+                    <Button
+                      key={item.listing_id}
+                      className="agri-btn-block"
+                      size="sm"
+                      onClick={() => startCheckout(item)}
+                    >
+                      Pay {fmtKES(Number(item.price_per_unit) * item.cartQuantity)} for{" "}
+                      {item.category === "produce" ? `${beanShort(item.variety)} Beans` : item.title}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Payment Modal Triggered from Cart */}
+      {checkoutItem && (
+        <PaymentModal
+          open={paymentOpen}
+          listing={checkoutItem}
+          quantity={checkoutQty}
+          goto={goto}
+          onClose={() => setPaymentOpen(false)}
+          onSuccess={() => {
+            push("Payment completed!", "green");
+            removeFromCart(checkoutItem.listing_id);
+            goto("orders");
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -1995,7 +2187,7 @@ function InputDetail({ item, goto, guest = false }) {
   if (loading) return <PageSkeleton rows={1} />;
   if (!fresh) return null;
 
-  const catIcon = INPUT_CATEGORIES.find((c) => c.id === fresh.category)?.icon || Package;
+  const wheat = INPUT_CATEGORIES.find((c) => c.id === fresh.category)?.icon || Package;
   const available = Number(fresh.quantity_available) > 0;
 
   const requireAuth = async () => {
@@ -2043,7 +2235,7 @@ function InputDetail({ item, goto, guest = false }) {
           className="w-full h-48 rounded mb-4 flex items-center justify-center"
           style={{ background: "var(--surface-alt)" }}
         >
-          {React.createElement(catIcon, { size: 48, color: "var(--primary)" })}
+          {React.createElement(wheat, { size: 48, color: "var(--primary)" })}
         </div>
 
         <h2 className="text-xl font-bold mb-2">{fresh.title}</h2>
@@ -2662,14 +2854,14 @@ function MyListings({ goto, role }) {
         <div className="space-y-3">
           {grouped[tab].map((p) => {
             const isProduce = p.category === "produce";
-            const CatIcon = isProduce ? Wheat : (INPUT_CATEGORIES.find((c) => c.id === p.category)?.icon || Package);
+            const wheat = isProduce ? Wheat : (INPUT_CATEGORIES.find((c) => c.id === p.category)?.icon || Package);
             return (
               <div key={p.listing_id} className="agri-card p-4 flex flex-wrap items-center gap-4">
                 <div
                   className="w-11 h-11 rounded flex items-center justify-center shrink-0"
                   style={{ background: "var(--primary-soft)" }}
                 >
-                  <CatIcon size={20} color="var(--primary)" />
+                  <Wheat size={20} color="var(--primary)" />
                 </div>
                 <div className="flex-1 min-w-[200px]">
                   <div className="font-semibold text-sm">{titleFor(p)}</div>
@@ -3025,16 +3217,22 @@ function MarketPrices({ guest, goto }) {
 /* ============================================================================
    ORDERS
    ========================================================================== */
-function Orders() {
+function Orders({ goto, user }) {
   const { push } = useToast();
+  const { confirm } = useModal();
   const [filter, setFilter] = useState("all");
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [working, setWorking] = useState(null);
 
+  // Farmers and suppliers see orders for their products (they're the seller).
+  // Buyers see orders they placed (they're the buyer).
+const myRole = user?.role === "buyer" ? "buyer" : user?.role === "admin" ? "all" : "seller";
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const params = filter === "all" ? {} : { status: filter.toLowerCase() };
+      const params = { role: myRole };
+      if (filter !== "all") params.status = filter.toLowerCase();
       const data = await getOrders(params);
       setRows(data.orders || []);
     } catch (err) {
@@ -3042,31 +3240,72 @@ function Orders() {
     } finally {
       setLoading(false);
     }
-  }, [filter, push]);
+  }, [filter, myRole, push]);
 
   useEffect(() => { load(); }, [load]);
 
-  const updateStatus = async (orderId, status) => {
+  const advance = async (row, action) => {
+    const label = action === "ready_for_pickup" ? "ready for pickup" : "dispatched";
+    const ok = await confirm({
+      tone: "info",
+      title: `Mark as ${label}?`,
+      body: action === "ready_for_pickup"
+        ? "The buyer will see a pickup code to show you on collection."
+        : "The buyer will be notified that the order is on the way.",
+      confirmLabel: `Mark ${label}`,
+      cancelLabel: "Cancel",
+    });
+    if (!ok) return;
+
+    setWorking(row.rawId);
     try {
-      await updateOrderStatus(orderId, status);
-      push(`Order marked as ${status}`, "green");
+      await sellerAdvance(row.rawId, action);
+      push(`Order marked as ${label}`, "green");
       load();
     } catch (err) {
       push(err.message || "Failed to update order", "red");
+    } finally {
+      setWorking(null);
     }
   };
+
+  const fulfillmentLabel = (s) => ({
+    awaiting_seller: "Awaiting seller",
+    ready_for_pickup: "Ready for pickup",
+    dispatched: "Dispatched",
+    delivered: "Delivered",
+    issue: "Issue",
+  }[s] || s || "—");
+
+  const fulfillmentTone = (s) => ({
+    awaiting_seller: "amber",
+    ready_for_pickup: "blue",
+    dispatched: "blue",
+    delivered: "green",
+    issue: "red",
+  }[s] || "gray");
 
   return (
     <div>
       <SectionHeading title="Orders" subtitle="Manage orders involving your produce and purchased inputs." />
+
       <div className="flex gap-2 mb-5 overflow-x-auto agri-scroll pb-1">
         {["all", "Pending", "Confirmed", "Processing", "Completed", "Cancelled"].map((s) => (
-          <button key={s} onClick={() => setFilter(s)} className="agri-btn agri-btn-sm"
-            style={{ background: filter === s ? "var(--primary)" : "var(--surface)", color: filter === s ? "#fff" : "var(--text)", border: "1px solid var(--border-strong)" }}>
+          <button
+            key={s}
+            onClick={() => setFilter(s)}
+            className="agri-btn agri-btn-sm"
+            style={{
+              background: filter === s ? "var(--primary)" : "var(--surface)",
+              color: filter === s ? "#fff" : "var(--text)",
+              border: "1px solid var(--border-strong)",
+            }}
+          >
             {s === "all" ? "All" : s}
           </button>
         ))}
       </div>
+
       {loading ? (
         <PageSkeleton rows={3} />
       ) : rows.length === 0 ? (
@@ -3076,26 +3315,94 @@ function Orders() {
           <div className="agri-table-wrap">
             <table className="agri-table">
               <thead>
-                <tr><th>Order ID</th><th>Item</th><th>Counterparty</th><th>Quantity</th><th>Amount</th><th>Date</th><th>Status</th><th></th></tr>
+                <tr>
+                  <th>Order</th>
+                  <th>Item</th>
+                  <th>Counterparty</th>
+                  <th>Location</th>
+                  <th>Qty</th>
+                  <th>Amount</th>
+                  <th>Date</th>
+                  <th>Payment</th>
+                  <th>Fulfillment</th>
+                  <th></th>
+                </tr>
               </thead>
-             <tbody>
-  {rows.map((o) => (
-    <tr key={o.id}
-        style={{ cursor: "pointer" }}
-        onClick={() => goto("order-detail", { orderId: o.rawId })}>
-      <td className="mono">{o.id}</td>
-      <td className="font-medium">{o.item}</td>
-      <td>{o.counterparty}</td>
-      <td className="mono">{o.quantity}</td>
-      <td className="mono font-semibold">{fmtKES(o.amount)}</td>
-      <td>{fmtDate(o.date)}</td>
-      <td><Badge tone={statusTone(o.status)}>{o.status}</Badge></td>
-      <td onClick={(e) => e.stopPropagation()}>
-        {/* existing buttons */}
-      </td>
-    </tr>
-  ))}
-</tbody>
+              <tbody>
+                {rows.map((o) => {
+                  const isSeller = o.myRole === "seller";
+                  const needsAction =
+                    isSeller &&
+                    o.fulfillmentStatus === "awaiting_seller" &&
+                    o.fulfillmentMethod;
+
+                  // What location to show: buyer location for the seller,
+                  // seller/listing location for the buyer.
+                  const locationText = isSeller
+                    ? o.deliveryAddress
+                      ? `${o.deliveryAddress}${o.deliveryLandmark ? ` · ${o.deliveryLandmark}` : ""}`
+                      : o.counterpartyLocation
+                    : o.counterpartyLocation;
+
+                  return (
+                    <tr
+                      key={o.id}
+                      style={{ cursor: "pointer" }}
+                      onClick={() => goto("order-detail", { orderId: o.rawId })}
+                    >
+                      <td className="mono">{o.id}</td>
+                      <td className="font-medium">{o.item}</td>
+                      <td>
+                        {o.counterpartyName}
+                        {o.counterpartyPhone && (
+                          <div className="text-xs mono" style={{ color: "var(--text-faint)" }}>
+                            {o.counterpartyPhone}
+                          </div>
+                        )}
+                      </td>
+                      <td className="text-xs">
+                        <div className="flex items-start gap-1">
+                          <MapPin size={11} style={{ marginTop: 3, flexShrink: 0 }} />
+                          <span>{locationText || "—"}</span>
+                        </div>
+                      </td>
+                      <td className="mono">{o.quantity}</td>
+                      <td className="mono font-semibold">{fmtKES(o.amount)}</td>
+                      <td>{fmtDate(o.date)}</td>
+                      <td><Badge tone={statusTone(o.status)}>{o.status}</Badge></td>
+                      <td>
+                        {o.fulfillmentMethod ? (
+                          <Badge tone={fulfillmentTone(o.fulfillmentStatus)}>
+                            {fulfillmentLabel(o.fulfillmentStatus)}
+                          </Badge>
+                        ) : (
+                          <span className="text-xs" style={{ color: "var(--text-faint)" }}>—</span>
+                        )}
+                      </td>
+                      <td onClick={(e) => e.stopPropagation()}>
+                        {needsAction && o.fulfillmentMethod === "pickup" && (
+                          <Button
+                            size="sm"
+                            disabled={working === o.rawId}
+                            onClick={() => advance(o, "ready_for_pickup")}
+                          >
+                            Ready for pickup
+                          </Button>
+                        )}
+                        {needsAction && o.fulfillmentMethod === "delivery" && (
+                          <Button
+                            size="sm"
+                            disabled={working === o.rawId}
+                            onClick={() => advance(o, "dispatched")}
+                          >
+                            Dispatch
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
             </table>
           </div>
         </div>
@@ -3357,9 +3664,9 @@ function AdminDashboard({ goto }) {
   );
 }
 
-function AdminUsers() {
+  function AdminUsers() {
   const { push } = useToast();
-  const { open } = useModal();
+  const { confirm } = useModal();
   const [filter, setFilter] = useState("all");
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -3617,7 +3924,6 @@ function GuestPage({ children, page, goto, goLogin, goRegister }) {
     </div>
   );
 }
-
 /* ============================================================================
    ROOT APP
    ========================================================================== */
@@ -3637,9 +3943,15 @@ export default function App() {
   }, []);
 
   const goto = (p, item) => {
-    if (p === "register") { setAuthMode("register"); setPage("login"); }
-    else if (p === "login") { setAuthMode("login"); setPage("login"); }
-    else { setPage(p); }
+    if (p === "register") {
+      setAuthMode("register");
+      setPage("login");
+    } else if (p === "login") {
+      setAuthMode("login");
+      setPage("login");
+    } else {
+      setPage(p);
+    }
     setSelectedItem(item || null);
     window.scrollTo?.(0, 0);
   };
@@ -3665,56 +3977,55 @@ export default function App() {
     setPage("landing");
   };
 
- if (!session) {
-  let guestContent = null;
+  // --- UNAUTHENTICATED / GUEST FLOW ---
+  if (!session) {
+    let guestContent = null;
 
-  if (page === "landing") {
-    guestContent = <Landing goto={goto} goLogin={goLogin} goRegister={goRegister} />;
-  } else if (page === "login") {
-    guestContent = <Login goto={goto} onLogin={handleLogin} mode={authMode} setMode={setAuthMode} />;
-  } else if (page === "about") {
-    guestContent = <AboutPage goto={goto} goLogin={goLogin} goRegister={goRegister} />;
-  } else if (page === "marketplace" || page === "guest-produce") {
-    guestContent = (
-      <GuestPage page="guest-produce" goto={goto} goLogin={goLogin} goRegister={goRegister}>
-        <Marketplace goto={goto} guest />
-      </GuestPage>
+    if (page === "landing") {
+      guestContent = <Landing goto={goto} goLogin={goLogin} goRegister={goRegister} />;
+    } else if (page === "login") {
+      guestContent = <Login goto={goto} onLogin={handleLogin} mode={authMode} setMode={setAuthMode} />;
+    } else if (page === "about") {
+      guestContent = <AboutPage goto={goto} goLogin={goLogin} goRegister={goRegister} />;
+    } else if (page === "marketplace" || page === "guest-produce") {
+      guestContent = (
+        <GuestPage page="guest-produce" goto={goto} goLogin={goLogin} goRegister={goRegister}>
+          <Marketplace goto={goto} guest />
+        </GuestPage>
+      );
+    } else if (page === "guest-prices") {
+      guestContent = (
+        <GuestPage page="guest-prices" goto={goto} goLogin={goLogin} goRegister={goRegister}>
+          <MarketPrices guest goto={goto} />
+        </GuestPage>
+      );
+    } else if (page === "input-detail") {
+      guestContent = (
+        <GuestPage page="guest-produce" goto={goto} goLogin={goLogin} goRegister={goRegister}>
+          <InputDetail item={selectedItem} goto={goto} guest />
+        </GuestPage>
+      );
+    } else if (page === "produce-detail") {
+      guestContent = (
+        <GuestPage page="guest-produce" goto={goto} goLogin={goLogin} goRegister={goRegister}>
+          <ProduceDetail item={selectedItem} goto={goto} guest />
+        </GuestPage>
+      );
+        } else {
+      guestContent = <Landing goto={goto} goLogin={goLogin} goRegister={goRegister} />;
+    }
+
+    return (
+      <ToastHost>
+        <ModalHost>
+          <GlobalStyle />
+          {guestContent}
+        </ModalHost>
+      </ToastHost>
     );
-  } else if (page === "guest-prices") {
-    guestContent = (
-      <GuestPage page="guest-prices" goto={goto} goLogin={goLogin} goRegister={goRegister}>
-        <MarketPrices guest goto={goto} />
-      </GuestPage>
-    );
-  } else if (page === "input-detail") {
-    guestContent = (
-      <GuestPage page="guest-produce" goto={goto} goLogin={goLogin} goRegister={goRegister}>
-        <InputDetail item={selectedItem} goto={goto} guest />
-      </GuestPage>
-    );
-  } else if (page === "produce-detail") {
-    guestContent = (
-      <GuestPage page="guest-produce" goto={goto} goLogin={goLogin} goRegister={goRegister}>
-        <ProduceDetail item={selectedItem} goto={goto} guest />
-      </GuestPage>
-    );
-    } else if (page === "order-detail") {
-  guestContent = <Landing goto={goto} goLogin={goLogin} goRegister={goRegister} />;
-}
-  } else {
-    guestContent = <Landing goto={goto} goLogin={goLogin} goRegister={goRegister} />;
   }
 
-  return (
-    <ToastHost>
-      <ModalHost>
-        <GlobalStyle />
-        {guestContent}
-      </ModalHost>
-    </ToastHost>
-  );
-}
-
+  // --- AUTHENTICATED USER FLOW ---
   const role = session.role;
 
   const renderPage = () => {
@@ -3724,27 +4035,36 @@ export default function App() {
         if (role === "buyer") return <BuyerDashboard goto={goto} user={session} />;
         if (role === "supplier") return <SupplierDashboard goto={goto} user={session} />;
         return <AdminDashboard goto={goto} />;
-      case "recommendation": return <InputRecommendation />;
-      case "marketplace": return <Marketplace goto={goto} />;
-      case "input-detail": return <InputDetail item={selectedItem} goto={goto} />;
-      case "produce-detail": return <ProduceDetail item={selectedItem} goto={goto} />;
-      case "my-listings":   return <MyListings goto={goto} role={role} />;
-case "list-produce":  return <ListForm goto={goto} role="farmer" />;
-case "list-input":    return <ListForm goto={goto} role="supplier" />;
-      case "prices": return <MarketPrices goto={goto} />;
-      case "orders": return <Orders />;
-      case "transactions": return <Transactions />;
-      case "profile": return <Profile user={session} onUserUpdate={handleUserUpdate} />;
-      case "admin-users": return <AdminUsers />;
-      case "admin-prices": return <AdminMarketPrices />;
-      case "admin-reports": return <AdminReports />;
-      case "order-detail": return (
-  <OrderDetail
-    orderId={selectedItem?.orderId}
-    goto={goto}
-    user={session}
-  />
-);
+      case "recommendation":
+        return <InputRecommendation />;
+      case "marketplace":
+        return <Marketplace goto={goto} />;
+      case "input-detail":
+        return <InputDetail item={selectedItem} goto={goto} />;
+      case "produce-detail":
+        return <ProduceDetail item={selectedItem} goto={goto} />;
+      case "my-listings":
+        return <MyListings goto={goto} role={role} />;
+      case "list-produce":
+        return <ListForm goto={goto} role="farmer" />;
+      case "list-input":
+        return <ListForm goto={goto} role="supplier" />;
+      case "prices":
+        return <MarketPrices goto={goto} />;
+      case "orders":
+        return <Orders goto={goto} user={session} />;
+      case "transactions":
+        return <Transactions user={session} />;
+      case "profile":
+        return <Profile user={session} onUserUpdate={handleUserUpdate} />;
+      case "admin-users":
+        return <AdminUsers />;
+      case "admin-prices":
+        return <AdminMarketPrices />;
+      case "admin-reports":
+        return <AdminReports />;
+      case "order-detail":
+        return <OrderDetail orderId={selectedItem?.orderId} goto={goto} user={session} />;
       default:
         if (role === "farmer") return <FarmerDashboard goto={goto} user={session} />;
         if (role === "buyer") return <BuyerDashboard goto={goto} user={session} />;
@@ -3763,4 +4083,4 @@ case "list-input":    return <ListForm goto={goto} role="supplier" />;
       </ModalHost>
     </ToastHost>
   );
-
+}
