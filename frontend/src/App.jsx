@@ -21,7 +21,8 @@ import {
   adminListUsers, adminVerifyUser,
   adminListPrices, adminCreatePrice,
   adminListReports,
-  initiateMpesaPush, getPaymentStatus,getOrder, setFulfillment, sellerAdvance, buyerConfirm
+  initiateMpesaPush, getPaymentStatus,getOrder, setFulfillment, sellerAdvance, buyerConfirm,
+  adminGetStats
 } from "./api";
 
 /* ============================================================================
@@ -172,9 +173,30 @@ const GlobalStyle = () => (
    DOMAIN — bean varieties with KALRO mapping
    ========================================================================== */
 const BEAN_VARIETIES = [
-  { value: "Kenya Umoja",  market: "Rosecoco",              code: "KAT B1", type: "Red mottled bush bean",             label: "Kenya Umoja (Rosecoco type)" },
-  { value: "Kenya Tamu",   market: "Speckled / Sugar",      code: "MAC 34", type: "Red / beige speckled climbing bean", label: "Kenya Tamu (Speckled / Sugar type)" },
-  { value: "Kenya Mavuno", market: "Rosecoco / Mottled",    code: "MAC 64", type: "Dark red mottled climbing bean",     label: "Kenya Mavuno (Rosecoco / Mottled type)" },
+  {
+    value: "Kenya Umoja",
+    market: "Rosecoco",
+    code: "KAT B1",
+    type: "Red mottled bush bean",
+    label: "Rosecoco",
+    short: "Rosecoco",
+  },
+  {
+    value: "Kenya Tamu",
+    market: "Wairimu",
+    code: "MAC 34",
+    type: "Red/beige speckled climbing bean",
+    label: "Wairimu / Sugar (Kenya Tamu)",
+    short: "Wairimu",
+  },
+  {
+    value: "RWV Variety",
+    market: "Mwitemania",
+    code: "RWV",
+    type: "Root-rot resistant climbing bean",
+    label: "Mwitemania ",
+    short: "Mwitemania",
+  },
 ];
 const beanLabel = (value) => BEAN_VARIETIES.find((v) => v.value === value)?.label || value;
 const beanShort = (value) => BEAN_VARIETIES.find((v) => v.value === value)?.market || value;
@@ -1546,29 +1568,26 @@ function SupplierDashboard({ goto, user }) {
 /* ============================================================================
    INPUT RECOMMENDATION
    ========================================================================== */
-function InputRecommendation() {
+function InputRecommendation({ goto }) {
   const { push } = useToast();
   const { open } = useModal();
-  const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [form, setForm] = useState({
-    location: "Machakos County",
-    agroZone: "Upper Midland 4",
-    soilType: "Sandy loam",
-    soilPh: "5.6",
-    nitrogen: "Medium",
-    farmSize: "2",
     beanVariety: "Kenya Umoja",
-    previousCrop: "Maize",
+    season: "Long Rains",
+    county: "Machakos",
   });
   const update = (k, v) => setForm((f) => ({ ...f, [k]: v }));
-  const totalSteps = 3;
 
   const submit = async () => {
     setLoading(true);
     try {
-      const data = await getRecommendation(form);
+      const data = await getRecommendation({
+        variety: form.beanVariety,
+        season: form.season,
+        county: form.county,
+      });
       setResult(data);
     } catch (err) {
       open({
@@ -1601,160 +1620,143 @@ function InputRecommendation() {
   }
 
   if (result) {
-    const rec = result.recommendation || {
-      seed: result.seed || "—",
-      fertilizer: result.fertilizer || "—",
-      soilAmendment: result.soil_amendment || result.soilAmendment || "—",
-    };
-    const explanation =
-      result.explanation ||
-      (result.shap_values
-        ? Object.entries(result.shap_values).map(([factor, weight]) => ({ factor, value: "", weight: Math.abs(Number(weight)) }))
-        : []);
-    const summary = result.summary || "Recommendation generated from your farm conditions using the trained model.";
-
-    return (
-      <div className="max-w-2xl">
-        <SectionHeading eyebrow="Random Forest Model" title="Recommended Farm Inputs" subtitle="Based on the farm information you provided." />
-        <div className="grid sm:grid-cols-3 gap-3 mb-6">
-          {[
-            { label: "Recommended Seed", value: rec.seed, icon: Sprout },
-            { label: "Recommended Fertilizer", value: rec.fertilizer, icon: Beaker },
-            { label: "Recommended Soil Amendment", value: rec.soilAmendment, icon: Leaf },
-          ].map((r, i) => (
-            <div key={i} className="agri-card p-4">
-              <r.icon size={17} style={{ color: "var(--primary)" }} className="mb-2" />
-              <div className="text-xs font-semibold uppercase mb-1" style={{ color: "var(--text-faint)" }}>{r.label}</div>
-              <div className="text-sm font-semibold">{r.value}</div>
-            </div>
-          ))}
-        </div>
-        {explanation.length > 0 && (
-          <div className="agri-card p-5 mb-5">
-            <div className="flex items-center gap-2 mb-2">
-              <Info size={15} style={{ color: "var(--primary)" }} />
-              <span className="text-sm font-semibold">Why was this recommended?</span>
-            </div>
-            <p className="text-sm mb-4" style={{ color: "var(--text-muted)" }}>{summary}</p>
-            <div className="space-y-3">
-              {explanation.map((e, i) => {
-                const pct = Math.min(100, Math.round((Number(e.weight) || 0) * 100));
-                return (
-                  <div key={i}>
-                    <div className="flex justify-between text-xs mb-1">
-                      <span className="font-medium">
-                        {e.factor}{" "}
-                        {e.value && <span style={{ color: "var(--text-faint)" }}>({e.value})</span>}
-                      </span>
-                      <span className="mono" style={{ color: "var(--text-muted)" }}>{pct}%</span>
-                    </div>
-                    <div className="agri-bar-track"><div className="agri-bar-fill" style={{ width: `${pct}%` }} /></div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-        <div className="flex gap-3">
-          <Button variant="secondary" onClick={() => { setResult(null); setStep(1); }}>Start New Recommendation</Button>
-          <Button icon={ShoppingBag}>Buy Recommended Inputs</Button>
-        </div>
-      </div>
-    );
-  }
-
-  const selectedVariety = BEAN_VARIETIES.find((v) => v.value === form.beanVariety);
+  const rec = result.recommendation || {};
+  const explanation = Array.isArray(result.explanation) ? result.explanation : [];
+  const alternatives = Array.isArray(result.alternatives) ? result.alternatives : [];
 
   return (
-    <div className="max-w-xl">
-      <SectionHeading eyebrow="Random Forest Model" title="Input Recommendation" subtitle="Tell us about your farm to receive a tailored input recommendation." />
-      <div className="flex items-center gap-2 mb-6">
-        {[1, 2, 3].map((s) => (
-          <React.Fragment key={s}>
-            <div className={`agri-step ${s === step ? "active" : s < step ? "done" : ""}`}>{s < step ? <CheckCircle2 size={14} /> : s}</div>
-            {s < totalSteps && <div className="flex-1 h-px" style={{ background: s < step ? "var(--primary)" : "var(--border)" }} />}
-          </React.Fragment>
+    <div className="max-w-2xl">
+      <SectionHeading
+        eyebrow="Smart Advice"
+        title="What to use on your farm"
+        subtitle="Based on 25 bean farm tests done in Kenya between 2010 and 2012."
+      />
+
+      <div className="grid sm:grid-cols-3 gap-3 mb-6">
+        {[
+  { label: "Plant this seed",          value: beanLabel(rec.seed) || "—",        icon: Sprout },
+  { label: "Use this fertilizer",      value: rec.fertilizerDisplay || rec.fertilizer || "—", icon: Beaker },
+  { label: "Lime & seed treatment",    value: `${rec.soilAmendmentDisplay || rec.soilAmendment || "—"} · ${rec.inoculationDisplay || rec.inoculation || "—"}`, icon: Leaf },
+].map((r, i) => (
+          <div key={i} className="agri-card p-4">
+            <r.icon size={17} style={{ color: "var(--primary)" }} className="mb-2" />
+            <div className="text-xs font-semibold uppercase mb-1" style={{ color: "var(--text-faint)" }}>{r.label}</div>
+            <div className="text-sm font-semibold">{r.value}</div>
+          </div>
         ))}
       </div>
-      <div className="agri-card p-5">
-        {step === 1 && (
-          <div className="space-y-4">
-            <div className="text-sm font-semibold mb-1" style={{ color: "var(--text-faint)" }}>Step 1 of 3 — Location & Zone</div>
-            <Field label="Location">
-              <input className="agri-input" value={form.location} onChange={(e) => update("location", e.target.value)} />
-            </Field>
-            <Field label="Agro-ecological zone">
-              <select className="agri-select" value={form.agroZone} onChange={(e) => update("agroZone", e.target.value)}>
-                {["Upper Midland 1", "Upper Midland 2", "Upper Midland 3", "Upper Midland 4", "Lower Midland 1", "Lower Midland 2"].map((z) => <option key={z}>{z}</option>)}
-              </select>
-            </Field>
-            <Field label="Farm size (acres)">
-              <input className="agri-input" type="number" value={form.farmSize} onChange={(e) => update("farmSize", e.target.value)} />
-            </Field>
+
+      {explanation.length > 0 && (
+        <div className="agri-card p-5 mb-5">
+          <div className="flex items-center gap-2 mb-2">
+            <Info size={15} style={{ color: "var(--primary)" }} />
+            <span className="text-sm font-semibold">Why we suggest this</span>
           </div>
-        )}
-        {step === 2 && (
-          <div className="space-y-4">
-            <div className="text-sm font-semibold mb-1" style={{ color: "var(--text-faint)" }}>Step 2 of 3 — Soil Information</div>
-            <Field label="Soil type">
-              <select className="agri-select" value={form.soilType} onChange={(e) => update("soilType", e.target.value)}>
-                {["Sandy loam", "Clay loam", "Silty clay", "Volcanic loam", "Sandy clay"].map((z) => <option key={z}>{z}</option>)}
-              </select>
-            </Field>
-            <Field label="Soil pH" hint="If unknown, use your last soil test result or leave the estimate.">
-              <input className="agri-input" type="number" step="0.1" value={form.soilPh} onChange={(e) => update("soilPh", e.target.value)} />
-            </Field>
-            <Field label="Nitrogen level (if available)">
-              <select className="agri-select" value={form.nitrogen} onChange={(e) => update("nitrogen", e.target.value)}>
-                {["Low", "Medium", "High", "Not known"].map((z) => <option key={z}>{z}</option>)}
-              </select>
-            </Field>
+          <p className="text-sm mb-4" style={{ color: "var(--text-muted)" }}>{result.summary}</p>
+
+          <div className="p-3 rounded mb-4 text-xs"
+               style={{ background: "var(--surface-alt)", color: "var(--text-muted)" }}>
+            Longer bars mean the choice matters more. Numbers show extra beans for every hectare
+            (1 hectare ≈ 2.5 acres).
           </div>
-        )}
-        {step === 3 && (
-          <div className="space-y-4">
-            <div className="text-sm font-semibold mb-1" style={{ color: "var(--text-faint)" }}>Step 3 of 3 — Crop Details</div>
-            <Field label="Bean variety" hint="Names in brackets are the KALRO official line codes.">
-              <select className="agri-select" value={form.beanVariety} onChange={(e) => update("beanVariety", e.target.value)}>
-                {BEAN_VARIETIES.map((v) => (
-                  <option key={v.value} value={v.value}>{v.label}  ·  {v.code}</option>
-                ))}
-              </select>
-            </Field>
-            {selectedVariety && (
-              <div className="p-3 rounded text-sm"
-                style={{ background: "var(--primary-soft)", border: "1px solid var(--primary-soft-border)", color: "var(--primary-dark)" }}>
-                <div className="font-semibold mb-0.5">
-                  {selectedVariety.value} <span className="mono" style={{ opacity: 0.7 }}>· {selectedVariety.code}</span>
+
+          <div className="space-y-3">
+            {explanation.map((e, i) => {
+              const pct = Math.min(100, Math.round((Number(e.weight) || 0) * 100));
+              return (
+                <div key={i}>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="font-medium">{e.factor}</span>
+                    <span className="mono" style={{ color: "var(--text-muted)" }}>+{e.rawImpact} kg</span>
+                  </div>
+                  <div className="agri-bar-track"><div className="agri-bar-fill" style={{ width: `${pct}%` }} /></div>
                 </div>
-                <div style={{ opacity: 0.85 }}>
-                  Market class: <strong>{selectedVariety.market}</strong>. {selectedVariety.type}.
-                </div>
-              </div>
-            )}
-            <Field label="Previous crop">
-              <input className="agri-input" value={form.previousCrop} onChange={(e) => update("previousCrop", e.target.value)} />
-            </Field>
+              );
+            })}
           </div>
-        )}
-        <div className="flex justify-between mt-6">
-          <Button variant="secondary" disabled={step === 1} onClick={() => setStep((s) => s - 1)} icon={ChevronLeft}>Back</Button>
-          {step < totalSteps ? (
-            <Button onClick={() => setStep((s) => s + 1)}>Next</Button>
-          ) : (
-            <Button onClick={submit} disabled={loading}>{loading ? "Analysing…" : "Get Recommendation"}</Button>
-          )}
         </div>
+      )}
+
+      {alternatives.length > 0 && (
+        <div className="agri-card p-5 mb-5">
+          <h3 className="font-semibold mb-3">Other mixes we tested</h3>
+          <div className="agri-table-wrap">
+            <table className="agri-table">
+              <thead>
+                <tr><th>Fertilizer</th><th>Lime</th><th>Seed treatment</th></tr>
+              </thead>
+              <tbody>
+                {alternatives.map((a, i) => (
+                 <tr key={i}>
+  <td>{a.fertilizerDisplay || a.fertilizer}</td>
+  <td>{a.limeDisplay || a.lime}</td>
+  <td>{a.inoculationDisplay || a.inoculation}</td>
+</tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {result.disclaimer && (
+        <div className="p-3 rounded mb-5 text-xs"
+             style={{ background: "var(--surface-alt)", color: "var(--text-muted)" }}>
+          {result.disclaimer}
+        </div>
+      )}
+
+      <div className="flex gap-3">
+        <Button variant="secondary" onClick={() => setResult(null)}>Try another farm</Button>
+        <Button icon={ShoppingBag} onClick={() => goto("marketplace")}>
+  Buy these inputs
+</Button>
       </div>
     </div>
   );
 }
-/* ============================================================================
-   UNIFIED MARKETPLACE — produce + inputs in one browse experience
-   ========================================================================== */
-/* ============================================================================
-   UNIFIED MARKETPLACE — produce + inputs + cart drawer
-   ========================================================================== */
+
+  return (
+    <div className="max-w-xl">
+     <SectionHeading
+  eyebrow="Smart Advice"
+  title="Get advice for your farm"
+  subtitle="Tell us three things — we'll suggest the best inputs to use."
+/>
+
+      <div className="agri-card p-5 space-y-4">
+        <Field label="Bean variety" hint="Names in brackets are the KALRO official line codes.">
+          <select className="agri-select" value={form.beanVariety} onChange={(e) => update("beanVariety", e.target.value)}>
+            {BEAN_VARIETIES.map((v) => (
+              <option key={v.value} value={v.value}>{v.label}  ·  {v.code}</option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label="Season" hint="Which rains are you planting for?">
+          <select className="agri-select" value={form.season} onChange={(e) => update("season", e.target.value)}>
+            <option>Long Rains</option>
+            <option>Short Rains</option>
+          </select>
+        </Field>
+
+        <Field label="County" hint="Used for context — not fed to the model.">
+          <input className="agri-input" value={form.county} onChange={(e) => update("county", e.target.value)} placeholder="e.g. Machakos" />
+        </Field>
+
+        <Button className="agri-btn-block" onClick={submit} disabled={loading}>
+          {loading ? "Analysing…" : "Get Recommendation"}
+        </Button>
+      </div>
+
+      <p className="text-xs mt-3" style={{ color: "var(--text-faint)" }}>
+        Recommendations come from a Random Forest model trained on 25 Kenyan bean trials (2010–2012).
+        The model ranks input packages against each other; absolute yield varies by site.
+      </p>
+    </div>
+  );
+}
+
 const CATEGORY_FILTERS = [
   { id: "all", label: "All", icon: ShoppingBag },
   ...INPUT_CATEGORIES,
@@ -3594,23 +3596,32 @@ function Profile({ user, onUserUpdate }) {
    ADMIN
    ========================================================================== */
 function AdminDashboard({ goto }) {
-  const [stats, setStats] = useState({ farmers: 0, buyers: 0, listings: 0, users: [] });
+  const [stats, setStats] = useState({
+    farmers: 0,
+    buyers: 0,
+    suppliers: 0,
+    active_listings: 0,
+    completed_orders: 0,
+    pending_verifications: 0,
+    total_listings: 0,
+    total_orders: 0,
+    users: [],
+  });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [usersRes, pricesRes] = await Promise.all([adminListUsers(), adminListPrices()]);
+        const [statsRes, usersRes] = await Promise.all([
+          adminGetStats(),
+          adminListUsers(),
+        ]);
         if (cancelled) return;
-        const users = usersRes.users || [];
         setStats({
-          farmers: users.filter((u) => u.role === "farmer").length,
-          buyers: users.filter((u) => u.role === "buyer").length,
-          listings: 0,
-          users,
+          ...statsRes,
+          users: usersRes.users || [],
         });
-        void pricesRes;
       } catch (err) {
         console.warn("Admin dashboard load failed", err);
       } finally {
@@ -3627,25 +3638,40 @@ function AdminDashboard({ goto }) {
   return (
     <div>
       <SectionHeading title="Admin Dashboard" subtitle="Platform overview and management." />
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-7">
-        <StatCard label="Total Farmers" value={stats.farmers} icon={Sprout} />
-        <StatCard label="Total Buyers" value={stats.buyers} icon={Users} />
-        <StatCard label="Total Users" value={stats.users.length} icon={User} />
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
+        <StatCard label="Total Farmers" value={stats.farmers ?? 0} icon={Sprout} />
+        <StatCard label="Total Buyers" value={stats.buyers ?? 0} icon={Users} />
+        <StatCard label="Suppliers" value={stats.suppliers ?? 0} icon={Package} />
+        <StatCard label="Active Listings" value={stats.active_listings ?? 0} icon={Package} />
       </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-7">
+        <StatCard label="Pending Verifications" value={stats.pending_verifications ?? 0} icon={ShieldCheck} />
+        <StatCard label="Total Listings" value={stats.total_listings ?? 0} icon={Package} />
+        <StatCard label="Completed Orders" value={stats.completed_orders ?? 0} icon={Receipt} />
+        <StatCard label="Total Orders" value={stats.total_orders ?? 0} icon={ClipboardList} />
+      </div>
+
       <div className="grid lg:grid-cols-2 gap-5">
         <div className="agri-card p-5">
           <h3 className="font-semibold mb-4">Pending Verifications</h3>
           {pending.length === 0 ? (
-            <p className="text-sm" style={{ color: "var(--text-faint)" }}>No pending verifications.</p>
+            <p className="text-sm" style={{ color: "var(--text-faint)" }}>
+              No pending verifications.
+            </p>
           ) : (
             <div className="space-y-3">
               {pending.slice(0, 5).map((u) => (
                 <div key={u.user_id} className="flex items-center justify-between text-sm">
                   <div>
                     <div className="font-medium">{u.full_name}</div>
-                    <div className="text-xs" style={{ color: "var(--text-faint)" }}>{u.role} · {u.county || "—"}</div>
+                    <div className="text-xs" style={{ color: "var(--text-faint)" }}>
+                      {u.role} · {u.county || "—"}
+                    </div>
                   </div>
-                  <Button size="sm" icon={ShieldCheck} onClick={() => goto("admin-users")}>Review</Button>
+                  <Button size="sm" icon={ShieldCheck} onClick={() => goto("admin-users")}>
+                    Review
+                  </Button>
                 </div>
               ))}
             </div>
@@ -3654,9 +3680,15 @@ function AdminDashboard({ goto }) {
         <div className="agri-card p-5">
           <h3 className="font-semibold mb-4">Quick Actions</h3>
           <div className="space-y-2">
-            <Button className="agri-btn-block" onClick={() => goto("admin-prices")}>Manage Market Price Data</Button>
-            <Button className="agri-btn-block" variant="secondary" onClick={() => goto("admin-users")}>Manage Users</Button>
-            <Button className="agri-btn-block" variant="secondary" onClick={() => goto("marketplace")}>Review Produce Listings</Button>
+            <Button className="agri-btn-block" onClick={() => goto("admin-prices")}>
+              Manage Market Price Data
+            </Button>
+            <Button className="agri-btn-block" variant="secondary" onClick={() => goto("admin-users")}>
+              Manage Users
+            </Button>
+            <Button className="agri-btn-block" variant="secondary" onClick={() => goto("marketplace")}>
+              Review Produce Listings
+            </Button>
           </div>
         </div>
       </div>
@@ -4036,7 +4068,7 @@ export default function App() {
         if (role === "supplier") return <SupplierDashboard goto={goto} user={session} />;
         return <AdminDashboard goto={goto} />;
       case "recommendation":
-        return <InputRecommendation />;
+        return <InputRecommendation goto={goto} />;
       case "marketplace":
         return <Marketplace goto={goto} />;
       case "input-detail":

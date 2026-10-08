@@ -129,3 +129,4 @@ export const sellerAdvance = (id, action) =>
 
 export const buyerConfirm = (id, pickup_code) =>
   request(`/orders/${id}/confirm-receipt`, { method: "PATCH", body: { pickup_code } });
+export const adminGetStats = () => request("/admin/stats");

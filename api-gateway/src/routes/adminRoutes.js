@@ -15,5 +15,5 @@ router.delete('/admin/prices/:id', ctrl.deletePrice);
 
 router.get('/admin/reports', ctrl.listReports);
 router.patch('/admin/reports/:id', ctrl.resolveReport);
-
+router.get('/admin/stats', ctrl.getStats);
 module.exports = router;
