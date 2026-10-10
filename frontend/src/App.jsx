@@ -24,224 +24,24 @@ import {
   initiateMpesaPush, getPaymentStatus,getOrder, setFulfillment, sellerAdvance, buyerConfirm,
   adminGetStats
 } from "./api";
+import { BEAN_VARIETIES, beanLabel, beanShort } from "./constants/varieties";
+import { INPUT_CATEGORIES, CATEGORY_FILTERS } from "./constants/inputCategories";
+import { NAV_BY_ROLE } from "./constants/nav";
+import { fmtKES, fmtDate, statusTone } from "./utility";
+import GlobalStyle from "./styles/GlobalStyles";
+import { ModalHost, useModal } from "./contexts/ModalContext";
+import Button from "./components/button"; 
+import Badge from "./components/Badge";
+import SectionHeading from "./components/SectionHeading";
+import HeroSlideshow from "./components/HeroSlideshow";
+import { ToastHost, useToast } from "./contexts/ToastContext";
+import PageSkeleton from "./components/PageSkeleton";
+import CountUp from "./components/CountUp";
+import EmptyState from "./components/EmptyState";
+import StatCard from "./components/StatCard";
+import Field from "./components/Field";
+import RecommendedInputCard from "./components/RecommendedInputCard";
 
-/* ============================================================================
-   DESIGN TOKENS
-   ========================================================================== */
-const GlobalStyle = () => (
-  <style>{`
-    .agri-root {
-      --bg: #F8F8F5;
-      --surface: #FFFFFF;
-      --surface-alt: #F2F1EA;
-      --border: #E1DED4;
-      --border-strong: #C9C5B7;
-      --text: #1A1D1A;
-      --text-muted: #5A5D57;
-      --text-faint: #8A8D85;
-      --primary: #1E3A2B;
-      --primary-dark: #142619;
-      --primary-hover: #2A4A38;
-      --primary-soft: #E8EEE8;
-      --primary-soft-border: #C5D2C4;
-      --amber: #8A5A0B;
-      --amber-soft: #F5EEDC;
-      --amber-border: #E0CC97;
-      --blue: #2F4A6B;
-      --blue-soft: #E7EDF4;
-      --blue-border: #BFCDDD;
-      --red: #963A3A;
-      --red-soft: #F6E9E8;
-      --red-border: #E0BFBD;
-      font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      -webkit-font-smoothing: antialiased;
-    }
-    .agri-root .mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; }
-
-    .agri-btn {
-      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-      padding: 10px 18px; border-radius: 4px; font-size: 14px; font-weight: 600;
-      border: 1px solid transparent; cursor: pointer;
-      transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
-      white-space: nowrap;
-    }
-    .agri-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-    .agri-btn-primary { background: var(--primary); color: #fff; border-color: var(--primary); }
-    .agri-btn-primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
-    .agri-btn-secondary { background: var(--surface); color: var(--text); border-color: var(--border-strong); }
-    .agri-btn-secondary:hover { background: var(--surface-alt); border-color: var(--primary); color: var(--primary); }
-    .agri-btn-ghost { background: transparent; color: var(--text-muted); border-color: transparent; }
-    .agri-btn-ghost:hover { background: var(--surface-alt); color: var(--text); }
-    .agri-btn-danger { background: var(--surface); color: var(--red); border-color: var(--red-border); }
-    .agri-btn-danger:hover { background: var(--red-soft); }
-    .agri-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-    .agri-btn-sm { padding: 6px 12px; font-size: 13px; }
-    .agri-btn-block { width: 100%; }
-
-    .agri-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      box-shadow: 0 1px 2px rgba(26, 29, 26, 0.04);
-    }
-
-    .agri-input, .agri-select, .agri-textarea {
-      width: 100%; border: 1px solid var(--border-strong); border-radius: 4px;
-      padding: 9px 11px; font-size: 14px; font-family: inherit; color: var(--text);
-      background: var(--surface); transition: border-color 0.12s, box-shadow 0.12s;
-    }
-    .agri-input:focus, .agri-select:focus, .agri-textarea:focus {
-      outline: none; border-color: var(--primary);
-      box-shadow: 0 0 0 2px var(--primary-soft-border);
-    }
-    .agri-label { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 6px; display: block; }
-    .agri-hint { font-size: 12.5px; color: var(--text-faint); margin-top: 4px; }
-
-  .agri-badge {
-  display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600;
-  padding: 3px 8px; border-radius: 3px; border: 1px solid transparent;
-}
-.agri-badge-green { background: var(--primary-soft); border-color: var(--primary-soft-border); color: var(--primary-dark); }
-.agri-badge-amber { background: var(--amber-soft); border-color: var(--amber-border); color: var(--amber); }
-.agri-badge-blue  { background: var(--blue-soft); border-color: var(--blue-border); color: var(--blue); }
-.agri-badge-red   { background: var(--red-soft); border-color: var(--red-border); color: var(--red); }
-.agri-badge-gray  { background: var(--surface-alt); border-color: var(--border); color: var(--text-muted); }
-
-    .agri-nav-link {
-      display: flex; align-items: center; gap: 12px; padding: 9px 14px; border-radius: 4px;
-      font-size: 14px; font-weight: 500; color: var(--text-muted); cursor: pointer;
-       transition: background 0.12s, color 0.12s;
-    }
-    .agri-nav-link:hover { background: var(--surface-alt); color: var(--text); }
-    .agri-nav-link.active {
-      background: var(--primary-soft); color: var(--primary-dark);
-       font-weight: 600;
-    }
-
-    .agri-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
-    .agri-table th {
-      text-align: left; padding: 11px 14px; font-weight: 600; color: var(--text-muted);
-      border-bottom: 1px solid var(--border); white-space: nowrap; font-size: 12px;
-      text-transform: uppercase; letter-spacing: 0.04em; background: var(--surface-alt);
-    }
-    .agri-table td { padding: 13px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
-    .agri-table tr:last-child td { border-bottom: none; }
-    .agri-table tbody tr:hover td { background: #FBFBF8; }
-    .agri-table-wrap { overflow-x: auto; }
-
-    .agri-step {
-      width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center;
-      justify-content: center; font-size: 12.5px; font-weight: 700;
-      border: 1.5px solid var(--border-strong); color: var(--text-faint);
-      background: var(--surface); flex-shrink: 0;
-    }
-    .agri-step.active { border-color: var(--primary); background: var(--primary); color: #fff; }
-    .agri-step.done { border-color: var(--primary); background: var(--primary-soft); color: var(--primary-dark); }
-
-    .agri-bar-track { height: 8px; background: var(--surface-alt); border-radius: 3px; overflow: hidden; }
-    .agri-bar-fill { height: 100%; background: var(--primary); border-radius: 3px; }
-
-    a.agri-plain { text-decoration: none; color: inherit; }
-    .agri-scroll::-webkit-scrollbar { height: 6px; width: 6px; }
-    .agri-scroll::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
-
-   .agri-stat {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  box-shadow: 0 1px 2px rgba(26, 29, 26, 0.04);
-}
-    .agri-feature {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      transition: border-color 0.12s ease;
-    }
-    .agri-feature:hover { border-color: var(--primary-soft-border); }
-
-    @keyframes agri-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
-    .agri-skel { background: var(--surface-alt); border-radius: 4px; animation: agri-pulse 1.4s ease-in-out infinite; }
-
-    @keyframes agri-toast-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-    @keyframes agri-modal-in { from { opacity: 0; transform: translateY(6px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
-  `}</style>
-);
-
-/* ============================================================================
-   DOMAIN — bean varieties with KALRO mapping
-   ========================================================================== */
-const BEAN_VARIETIES = [
-  {
-    value: "Kenya Umoja",
-    market: "Rosecoco",
-    code: "KAT B1",
-    type: "Red mottled bush bean",
-    label: "Rosecoco",
-    short: "Rosecoco",
-  },
-  {
-    value: "Kenya Tamu",
-    market: "Wairimu",
-    code: "MAC 34",
-    type: "Red/beige speckled climbing bean",
-    label: "Wairimu / Sugar (Kenya Tamu)",
-    short: "Wairimu",
-  },
-  {
-    value: "RWV Variety",
-    market: "Mwitemania",
-    code: "RWV",
-    type: "Root-rot resistant climbing bean",
-    label: "Mwitemania ",
-    short: "Mwitemania",
-  },
-];
-const beanLabel = (value) => BEAN_VARIETIES.find((v) => v.value === value)?.label || value;
-const beanShort = (value) => BEAN_VARIETIES.find((v) => v.value === value)?.market || value;
-
-const INPUT_CATEGORIES = [
-  { id: "seed",            label: "Certified Seeds",   icon: Sprout },
-  { id: "fertilizer",      label: "Fertilizers",       icon: Beaker },
-  { id: "soil_amendment",  label: "Soil Amendments",   icon: Leaf },
-  { id: "crop_protection", label: "Crop Protection",   icon: ShieldAlert },
-  { id: "equipment",       label: "Farm Equipment",    icon: Tractor },
-  { id: "other_input",     label: "Other Inputs",      icon: Package },
-];
-
-/* ============================================================================
-   TOAST SYSTEM
-   ========================================================================== */
-const ToastCtx = React.createContext({ push: () => {} });
-const useToast = () => React.useContext(ToastCtx);
-
-function ToastHost({ children }) {
-  const [toasts, setToasts] = useState([]);
-  const push = useCallback((msg, tone = "green") => {
-    const id = Math.random().toString(36).slice(2);
-    setToasts((t) => [...t, { id, msg, tone }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3200);
-  }, []);
-  return (
-    <ToastCtx.Provider value={{ push }}>
-      {children}
-      <div className="fixed bottom-24 md:bottom-6 right-4 md:right-6 z-50 flex flex-col gap-2 pointer-events-none" aria-live="polite" aria-atomic="true">
-        {toasts.map((t) => {
-          const accent = t.tone === "green" ? "var(--primary)" : t.tone === "red" ? "var(--red)" : "var(--amber)";
-          const Icon = t.tone === "green" ? CheckCircle2 : AlertCircle;
-          return (
-            <div key={t.id} className="agri-card px-4 py-3 text-sm font-medium flex items-center gap-2"
-              style={{ borderLeft: `3px solid ${accent}`, minWidth: 260, maxWidth: 340, animation: "agri-toast-in 180ms ease-out" }} role="status">
-              <Icon size={15} style={{ color: accent, flexShrink: 0 }} />
-              <span style={{ color: "var(--text)" }}>{t.msg}</span>
-            </div>
-          );
-        })}
-      </div>
-    </ToastCtx.Provider>
-  );
-}
 /* ============================================================================
    PAYMENT MODAL — phone input → STK push → poll → confirm
    ========================================================================== */
@@ -536,319 +336,6 @@ function PaymentModal({ open, listing, quantity, onClose, onSuccess, goto }) {
     </div>
   );
 }
-/* ============================================================================
-   MODAL SYSTEM — success/error dialogs and confirm prompts
-   ========================================================================== */
-const ModalCtx = React.createContext({ open: () => {}, confirm: async () => false });
-const useModal = () => React.useContext(ModalCtx);
-
-function ModalHost({ children }) {
-  const [modal, setModal] = useState(null);
-
-  const open = useCallback((opts) => {
-    setModal({
-      id: Math.random().toString(36).slice(2),
-      tone: opts.tone || "info",
-      title: opts.title || "",
-      body: opts.body || "",
-      confirmLabel: opts.confirmLabel || "OK",
-      cancelLabel: opts.cancelLabel || "Cancel",
-      hasCancel: !!opts.hasCancel,
-      resolve: opts.resolve || null,
-    });
-  }, []);
-
-  const confirm = useCallback(
-    (opts) => new Promise((resolve) => {
-      setModal({
-        id: Math.random().toString(36).slice(2),
-        tone: opts.tone || "info",
-        title: opts.title || "Are you sure?",
-        body: opts.body || "",
-        confirmLabel: opts.confirmLabel || "Confirm",
-        cancelLabel: opts.cancelLabel || "Cancel",
-        hasCancel: true,
-        resolve,
-      });
-    }),
-    []
-  );
-
-  const close = useCallback((result) => {
-    setModal((m) => {
-      if (m?.resolve) m.resolve(result);
-      return null;
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!modal) return;
-    const onKey = (e) => { if (e.key === "Escape") close(false); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [modal, close]);
-
-  const toneStyles = {
-    success: { accent: "var(--primary)", Icon: CheckCircle2 },
-    error:   { accent: "var(--red)",     Icon: AlertCircle },
-    warn:    { accent: "var(--amber)",   Icon: AlertCircle },
-    info:    { accent: "var(--primary)", Icon: Info },
-  };
-
- return (
-  <ModalCtx.Provider value={{ open, confirm }}>
-    {children}
-    {modal && (
-      <div
-        className="agri-root flex items-center justify-center p-4"
-        style={{
-          position: "fixed",
-          top: 0, left: 0, right: 0, bottom: 0,
-          zIndex: 9999,
-        }}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="modal-title"
-      >
-        {/* Backdrop */}
-        <div
-          onClick={() => close(false)}
-          style={{
-            position: "absolute",
-            top: 0, left: 0, right: 0, bottom: 0,
-            background: "rgba(15, 25, 18, 0.65)",
-          }}
-        />
-
-        {/* Card */}
-        <div
-          className="agri-card relative w-full max-w-md"
-          style={{
-            animation: "agri-modal-in 160ms ease-out",
-            background: "#FFFFFF",
-            boxShadow: "0 12px 40px rgba(15, 25, 18, 0.28), 0 2px 8px rgba(15, 25, 18, 0.10)",
-            border: "1px solid var(--border-strong)",
-          }}
-        >
-          {(() => {
-            const cfg = toneStyles[modal.tone] || toneStyles.info;
-            const Ico = cfg.Icon;
-            return (
-              <>
-                <div className="p-5">
-                  <div className="flex items-start gap-3">
-                    <div
-                      className="w-9 h-9 rounded flex items-center justify-center shrink-0"
-                      style={{ background: "var(--surface-alt)" }}
-                    >
-                      <Ico size={18} style={{ color: cfg.accent }} />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <h3
-                        id="modal-title"
-                        className="font-semibold text-base mb-1"
-                        style={{ color: "var(--text)" }}
-                      >
-                        {modal.title}
-                      </h3>
-                      {modal.body && (
-                        <p
-                          className="text-sm"
-                          style={{ color: "var(--text-muted)", lineHeight: 1.5 }}
-                        >
-                          {modal.body}
-                        </p>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => close(false)}
-                      aria-label="Close"
-                      className="shrink-0 -mt-1 -mr-1 p-1 rounded hover:bg-[var(--surface-alt)]"
-                    >
-                      <X size={16} style={{ color: "var(--text-muted)" }} />
-                    </button>
-                  </div>
-                </div>
-
-                <div
-                  className="px-5 py-3 border-t flex justify-end gap-2"
-                  style={{ borderColor: "var(--border)", background: "#fff" }}
-                >
-                  {modal.hasCancel && (
-                    <Button variant="secondary" size="sm" onClick={() => close(false)}>
-                      {modal.cancelLabel}
-                    </Button>
-                  )}
-                  <Button
-                    size="sm"
-                    variant={modal.tone === "error" ? "danger" : "primary"}
-                    onClick={() => close(true)}
-                  >
-                    {modal.confirmLabel}
-                  </Button>
-                </div>
-              </>
-            );
-          })()}
-        </div>
-      </div>
-    )}
-   </ModalCtx.Provider>
-  );
-}
-/* ============================================================================
-   COUNT-UP
-   ========================================================================== */
-function CountUp({ to, duration = 1200 }) {
-  const [n, setN] = useState(0);
-  const ref = React.useRef(null);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof IntersectionObserver === "undefined") { setN(to); return; }
-    const io = new IntersectionObserver(([e]) => {
-      if (!e.isIntersecting) return;
-      io.disconnect();
-      const start = performance.now();
-      const tick = (t) => {
-        const p = Math.min(1, (t - start) / duration);
-        setN(Math.round(to * (1 - Math.pow(1 - p, 3))));
-        if (p < 1) requestAnimationFrame(tick);
-      };
-      requestAnimationFrame(tick);
-    }, { threshold: 0.4 });
-    io.observe(el);
-    return () => io.disconnect();
-  }, [to, duration]);
-  return <span ref={ref} className="mono">{n.toLocaleString("en-KE")}</span>;
-}
-
-/* ============================================================================
-   HERO SLIDESHOW
-   ========================================================================== */
-const HERO_SLIDES = [
-  { src: "annie-spratt-QYcSeY7vuZM-unsplash.jpg", alt: "Bean field in Kenya" },
-  { src: "annie-spratt-GaLzDCnA5EI-unsplash.jpg", alt: "Farmer harvesting beans by hand" },
-  { src: "Untitled design.jpg", alt: "Sorting dried beans" },
-  { src: "kelly-sikkema-k1cpHnqBuMM-unsplash.jpg", alt: "Beans drying on tarps" },
-];
-
-function HeroSlideshow({ interval = 5000 }) {
-  const [index, setIndex] = useState(0);
-  const [paused, setPaused] = useState(false);
-  const prefersReduced = useMemo(
-    () => typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches,
-    []
-  );
-  useEffect(() => {
-    if (paused || prefersReduced || HERO_SLIDES.length < 2) return;
-    const id = setInterval(() => setIndex((i) => (i + 1) % HERO_SLIDES.length), interval);
-    return () => clearInterval(id);
-  }, [paused, prefersReduced, interval]);
-  const prev = () => setIndex((i) => (i - 1 + HERO_SLIDES.length) % HERO_SLIDES.length);
-  const next = () => setIndex((i) => (i + 1) % HERO_SLIDES.length);
-  return (
-    <div className="agri-card p-2" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
-      <div className="relative w-full h-72 rounded overflow-hidden bg-[var(--surface-alt)]">
-        {HERO_SLIDES.map((s, i) => (
-          <img key={s.src} src={s.src} alt={s.alt} loading={i === 0 ? "eager" : "lazy"}
-            className="absolute inset-0 w-full h-full object-cover"
-            style={{ opacity: i === index ? 1 : 0, transition: prefersReduced ? "none" : "opacity 700ms ease-in-out" }} />
-        ))}
-        <button type="button" onClick={prev} aria-label="Previous slide"
-          className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center rounded opacity-0 hover:opacity-100 focus:opacity-100 transition-opacity"
-          style={{ background: "rgba(20, 38, 25, 0.78)", color: "#fff" }}>
-          <ChevronLeft size={18} />
-        </button>
-        <button type="button" onClick={next} aria-label="Next slide"
-          className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center rounded opacity-0 hover:opacity-100 focus:opacity-100 transition-opacity"
-          style={{ background: "rgba(20, 38, 25, 0.78)", color: "#fff" }}>
-          <ChevronRight size={18} />
-        </button>
-        <div className="absolute right-3 bottom-3 flex items-center gap-1.5">
-          {HERO_SLIDES.map((s, i) => (
-            <button key={s.src} type="button" aria-label={`Go to slide ${i + 1}`} onClick={() => setIndex(i)}
-              className="w-2 h-2 rounded-sm transition-colors"
-              style={{ background: i === index ? "var(--primary)" : "rgba(255,255,255,0.65)", border: "1px solid rgba(20, 38, 25, 0.45)" }} />
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ============================================================================
-   SHARED UI PRIMITIVES
-   ========================================================================== */
-const Badge = ({ tone = "gray", icon: Icon, children }) => (
-  <span className={`agri-badge agri-badge-${tone}`}>{Icon && <Icon size={12} />}{children}</span>
-);
-
-const statusTone = (status) => {
-  const s = (status || "").toLowerCase();
-  return ({
-    pending: "amber", confirmed: "blue", processing: "amber", completed: "green",
-    cancelled: "red", active: "green", sold: "gray", draft: "amber",
-    paused: "amber", unavailable: "red", verified: "green",
-  }[s] || "gray");
-};
-
-const Button = ({ variant = "primary", size = "md", icon: Icon, className = "", ...props }) => (
-  <button className={`agri-btn agri-btn-${variant} ${size === "sm" ? "agri-btn-sm" : ""} ${className}`} {...props}>
-    {Icon && <Icon size={16} />}
-    {props.children}
-  </button>
-);
-
-const Field = ({ label, hint, children }) => (
-  <div>
-    <label className="agri-label">{label}</label>
-    {children}
-    {hint && <p className="agri-hint">{hint}</p>}
-  </div>
-);
-
-const SectionHeading = ({ eyebrow, title, subtitle, action }) => (
-  <div className="flex items-start justify-between gap-4 flex-wrap mb-5">
-    <div>
-      {eyebrow && <div className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: "var(--primary)" }}>{eyebrow}</div>}
-      <h2 className="text-xl font-bold" style={{ color: "var(--text)", letterSpacing: "-0.01em" }}>{title}</h2>
-      {subtitle && <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>{subtitle}</p>}
-    </div>
-    {action}
-  </div>
-);
-
-const StatCard = ({ label, value, icon: Icon, mono = true }) => (
-  <div className="agri-stat p-4">
-    <div className="flex items-center justify-between mb-2">
-      <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>{label}</span>
-      {Icon && <Icon size={16} style={{ color: "var(--primary)" }} />}
-    </div>
-    <div className={`text-2xl font-bold ${mono ? "mono" : ""}`}>{value}</div>
-  </div>
-);
-
-const fmtKES = (n) => `KES ${Number(n || 0).toLocaleString("en-KE")}`;
-const fmtDate = (d) => (d ? new Date(d).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" }) : "—");
-
-const PageSkeleton = ({ rows = 3 }) => (
-  <div className="space-y-3">
-    <div className="agri-skel h-8 w-56" />
-    <div className="agri-skel h-4 w-80" />
-    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-5">
-      {Array.from({ length: rows }).map((_, i) => <div key={i} className="agri-skel h-40" />)}
-    </div>
-  </div>
-);
-
-const EmptyState = ({ icon: Icon = Package, title, body, action }) => (
-  <div className="agri-card p-10 text-center max-w-md mx-auto">
-    <Icon size={32} style={{ color: "var(--text-faint)" }} className="mx-auto mb-3" />
-    <h3 className="font-semibold mb-1">{title}</h3>
-    {body && <p className="text-sm mb-5" style={{ color: "var(--text-muted)" }}>{body}</p>}
-    {action}
-  </div>
-);
 
 /* ============================================================================
    GUEST HEADER
@@ -1138,48 +625,6 @@ function Login({ goto, onLogin, mode, setMode }) {
     </div>
   );
 }
-
-/* ============================================================================
-   APP SHELL
-   ========================================================================== */
-const NAV_BY_ROLE = {
- farmer: [
-  { id: "dashboard",   label: "Dashboard",             icon: Home },
-  { id: "marketplace", label: "Marketplace",           icon: ShoppingBag },
-  { id: "recommendation", label: "Input Recommendations", icon: Sprout },
-  { id: "my-listings", label: "My Listings",           icon: Wheat },
-  { id: "list-produce", label: "List Produce",         icon: Plus },
-  { id: "prices",      label: "Market Prices",         icon: TrendingUp },
-  { id: "orders",      label: "Orders",                icon: ClipboardList },
-  { id: "transactions", label: "Transactions",         icon: Receipt },
-  { id: "profile",     label: "Profile",               icon: User },
-],
-buyer: [
-  { id: "dashboard",   label: "Dashboard",             icon: Home },
-  { id: "marketplace", label: "Marketplace",           icon: ShoppingBag },
-  { id: "prices",      label: "Market Prices",         icon: TrendingUp },
-  { id: "orders",      label: "Orders",                icon: ClipboardList },
-  { id: "transactions", label: "Transactions",         icon: Receipt },
-  { id: "profile",     label: "Profile",               icon: User },
-],
-supplier: [
-  { id: "dashboard",   label: "Dashboard",             icon: Home },
-  { id: "marketplace", label: "Marketplace",           icon: ShoppingBag },
-  { id: "my-listings", label: "My Listings",           icon: Package },
-  { id: "list-input",  label: "Add Listing",           icon: Plus },
-  { id: "orders",      label: "Orders",                icon: ClipboardList },
-  { id: "transactions", label: "Transactions",         icon: Receipt },
-  { id: "profile",     label: "Profile",               icon: User },
-],
-admin: [
-  { id: "dashboard",   label: "Dashboard",             icon: Home },
-  { id: "admin-users", label: "Users",                 icon: Users },
-  { id: "marketplace", label: "Listings",              icon: ShoppingBag },
-  { id: "admin-prices", label: "Market Prices",        icon: TrendingUp },
-  { id: "transactions", label: "Transactions",         icon: Receipt },
-  { id: "admin-reports", label: "Reports",             icon: Flag },
-],
-};
 
 function AppShell({ role, user, page, goto, onLogout, children }) {
   const [mobileMenu, setMobileMenu] = useState(false);
@@ -1568,18 +1013,43 @@ function SupplierDashboard({ goto, user }) {
 /* ============================================================================
    INPUT RECOMMENDATION
    ========================================================================== */
-function InputRecommendation({ goto }) {
-  const { push } = useToast();
+function InputRecommendation({ goto, initialResult = null, onResult = null }) {
   const { open } = useModal();
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState(null);
+  const [result, setResult] = useState(initialResult); // restores the App-level result on return
+  const [marketplaceListings, setMarketplaceListings] = useState([]);
+  const [history, setHistory] = useState([]);
   const [form, setForm] = useState({
     beanVariety: "Kenya Umoja",
     season: "Long Rains",
     county: "Machakos",
   });
   const update = (k, v) => setForm((f) => ({ ...f, [k]: v }));
-
+ 
+  // Load the farmer's saved recommendations once.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await getRecommendationHistory();
+        if (!cancelled) setHistory(data.recommendations || []);
+      } catch {
+        if (!cancelled) setHistory([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+ 
+  // Reload the history after a new recommendation is saved.
+  const refreshHistory = async () => {
+    try {
+      const data = await getRecommendationHistory();
+      setHistory(data.recommendations || []);
+    } catch {
+      // keep the list we already have
+    }
+  };
+ 
   const submit = async () => {
     setLoading(true);
     try {
@@ -1589,6 +1059,8 @@ function InputRecommendation({ goto }) {
         county: form.county,
       });
       setResult(data);
+      if (onResult) onResult(data);
+      refreshHistory(); // not awaited, so the result shows straight away
     } catch (err) {
       open({
         tone: "error",
@@ -1600,17 +1072,53 @@ function InputRecommendation({ goto }) {
       setLoading(false);
     }
   };
-
+ 
+  // Rebuild the result view from a saved record.
+  const openFromHistory = (h) => {
+    setResult({
+      recommendation: {
+        seed: h.recommended_seed || h.variety, // variety is an input now, so recommended_seed may be empty
+        fertilizer: h.recommended_fertilizer,
+        soilAmendment: h.recommended_lime,
+        inoculation: h.recommended_inoculation,
+      },
+      explanation: Array.isArray(h.shap_values) ? h.shap_values : [],
+      summary: h.summary || "",
+      disclaimer: "This is a saved recommendation from your history. Absolute yields vary by site.",
+    });
+    if (onResult) onResult(null); // clear the App-level copy of the latest result
+  };
+ 
+  // When a recommendation is on screen, fetch marketplace listings once so the
+  // input cards can check availability locally.
+  useEffect(() => {
+    if (!result) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await getMarketplace({});
+        if (!cancelled) setMarketplaceListings(data.listings || []);
+      } catch {
+        if (!cancelled) setMarketplaceListings([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [result]);
+ 
   if (loading) {
     return (
       <div className="max-w-2xl">
-        <SectionHeading eyebrow="Random Forest Model" title="Analysing farm conditions…" subtitle="Running your inputs through the recommendation model." />
+        <SectionHeading
+          eyebrow="Smart Advice"
+          title="Working out your advice…"
+          subtitle="Checking your answers against the trial results."
+        />
         <div className="space-y-3">
           <div className="agri-skel h-6 w-56" />
           <div className="grid sm:grid-cols-3 gap-3">
-            <div className="agri-skel h-28" />
-            <div className="agri-skel h-28" />
-            <div className="agri-skel h-28" />
+            <div className="agri-skel h-32" />
+            <div className="agri-skel h-32" />
+            <div className="agri-skel h-32" />
           </div>
           <div className="agri-skel h-40" />
           <div className="agri-skel h-10 w-48" />
@@ -1618,152 +1126,251 @@ function InputRecommendation({ goto }) {
       </div>
     );
   }
-
+ 
   if (result) {
-  const rec = result.recommendation || {};
-  const explanation = Array.isArray(result.explanation) ? result.explanation : [];
-  const alternatives = Array.isArray(result.alternatives) ? result.alternatives : [];
-
-  return (
-    <div className="max-w-2xl">
-      <SectionHeading
-        eyebrow="Smart Advice"
-        title="What to use on your farm"
-        subtitle="Based on 25 bean farm tests done in Kenya between 2010 and 2012."
-      />
-
-      <div className="grid sm:grid-cols-3 gap-3 mb-6">
-        {[
-  { label: "Plant this seed",          value: beanLabel(rec.seed) || "—",        icon: Sprout },
-  { label: "Use this fertilizer",      value: rec.fertilizerDisplay || rec.fertilizer || "—", icon: Beaker },
-  { label: "Lime & seed treatment",    value: `${rec.soilAmendmentDisplay || rec.soilAmendment || "—"} · ${rec.inoculationDisplay || rec.inoculation || "—"}`, icon: Leaf },
-].map((r, i) => (
-          <div key={i} className="agri-card p-4">
-            <r.icon size={17} style={{ color: "var(--primary)" }} className="mb-2" />
-            <div className="text-xs font-semibold uppercase mb-1" style={{ color: "var(--text-faint)" }}>{r.label}</div>
-            <div className="text-sm font-semibold">{r.value}</div>
-          </div>
-        ))}
-      </div>
-
-      {explanation.length > 0 && (
-        <div className="agri-card p-5 mb-5">
-          <div className="flex items-center gap-2 mb-2">
-            <Info size={15} style={{ color: "var(--primary)" }} />
-            <span className="text-sm font-semibold">Why we suggest this</span>
-          </div>
-          <p className="text-sm mb-4" style={{ color: "var(--text-muted)" }}>{result.summary}</p>
-
-          <div className="p-3 rounded mb-4 text-xs"
-               style={{ background: "var(--surface-alt)", color: "var(--text-muted)" }}>
-            Longer bars mean the choice matters more. Numbers show extra beans for every hectare
-            (1 hectare ≈ 2.5 acres).
-          </div>
-
-          <div className="space-y-3">
-            {explanation.map((e, i) => {
-              const pct = Math.min(100, Math.round((Number(e.weight) || 0) * 100));
-              return (
-                <div key={i}>
-                  <div className="flex justify-between text-xs mb-1">
-                    <span className="font-medium">{e.factor}</span>
-                    <span className="mono" style={{ color: "var(--text-muted)" }}>+{e.rawImpact} kg</span>
+    const rec = result.recommendation || {};
+    const explanation = Array.isArray(result.explanation) ? result.explanation : [];
+    const alternatives = Array.isArray(result.alternatives) ? result.alternatives : [];
+ 
+    // Bars show relative importance: the biggest factor is 100%, the rest scale from it.
+    // Absolute values, because SHAP-style weights can be negative.
+    const weights = explanation.map((e) => Math.abs(Number(e.weight) || 0));
+    const maxWeight = Math.max(1e-6, ...weights);
+ 
+    // Specific search terms only. Generic words like "seed" or "fertilizer" would
+    // make any listing count as a match, so they are left out.
+    const seedTerms = [beanShort(rec.seed), rec.seed].filter(Boolean);
+    const fertilizerTerms = [rec.fertilizer].filter(Boolean);
+    const limeTerms = rec.soilAmendment === "With lime" ? ["lime", "agricultural lime"] : [];
+    const inocTerms = rec.inoculation === "Inoculated" ? ["biofix", "inoculant", "rhizobium"] : [];
+    const limeAndInocTerms = [...limeTerms, ...inocTerms]; // empty when advice is "Without lime" and "Not inoculated"
+ 
+    return (
+      <div className="max-w-2xl">
+        <SectionHeading
+          eyebrow="Smart Advice"
+          title="What to use on your farm"
+          subtitle="Based on 25 bean farm tests done in Kenya between 2010 and 2012."
+        />
+ 
+        {/* Recommendation cards: each resolves to Buy or Agrovet */}
+        <div className="grid sm:grid-cols-3 gap-3 mb-6">
+          <RecommendedInputCard
+            icon={Sprout}
+            label="Your variety"
+            value={beanLabel(rec.seed) || "—"}
+            note="Confirm this is what you are planting."
+            searchTerms={seedTerms}
+            marketplaceListings={marketplaceListings}
+            goto={goto}
+          />
+          <RecommendedInputCard
+            icon={Beaker}
+            label="Use this fertilizer"
+            value={rec.fertilizerDisplay || rec.fertilizer || "—"}
+            searchTerms={fertilizerTerms}
+            marketplaceListings={marketplaceListings}
+            goto={goto}
+          />
+          <RecommendedInputCard
+            icon={Leaf}
+            label="Lime & seed treatment"
+            value={`${rec.soilAmendmentDisplay || rec.soilAmendment || "—"} · ${
+              rec.inoculationDisplay || rec.inoculation || "—"
+            }`}
+            searchTerms={limeAndInocTerms}
+            marketplaceListings={marketplaceListings}
+            goto={goto}
+          />
+        </div>
+ 
+        {/* Why we suggest this: relative weighting, not kg/ha */}
+        {explanation.length > 0 && (
+          <div className="agri-card p-5 mb-5">
+            <div className="flex items-center gap-2 mb-2">
+              <Info size={15} style={{ color: "var(--primary)" }} />
+              <span className="text-sm font-semibold">Why we suggest this</span>
+            </div>
+            {result.summary && (
+              <p className="text-sm mb-4" style={{ color: "var(--text-muted)" }}>
+                {result.summary}
+              </p>
+            )}
+ 
+            <div
+              className="p-3 rounded mb-4 text-xs"
+              style={{ background: "var(--surface-alt)", color: "var(--text-muted)" }}
+            >
+              Longer bars mean the factor mattered more in the recommendation.
+              This shows relative weighting only, not a prediction of your harvest.
+            </div>
+ 
+            <div className="space-y-3">
+              {explanation.map((e, i) => {
+                const pct = Math.round((weights[i] / maxWeight) * 100);
+                return (
+                  <div key={i}>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="font-medium">{e.factor}</span>
+                      <span className="mono" style={{ color: "var(--text-muted)" }}>
+                        {pct}%
+                      </span>
+                    </div>
+                    <div className="agri-bar-track">
+                      <div className="agri-bar-fill" style={{ width: `${pct}%` }} />
+                    </div>
                   </div>
-                  <div className="agri-bar-track"><div className="agri-bar-fill" style={{ width: `${pct}%` }} /></div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-        </div>
-      )}
-
-      {alternatives.length > 0 && (
-        <div className="agri-card p-5 mb-5">
-          <h3 className="font-semibold mb-3">Other mixes we tested</h3>
-          <div className="agri-table-wrap">
-            <table className="agri-table">
-              <thead>
-                <tr><th>Fertilizer</th><th>Lime</th><th>Seed treatment</th></tr>
-              </thead>
-              <tbody>
-                {alternatives.map((a, i) => (
-                 <tr key={i}>
-  <td>{a.fertilizerDisplay || a.fertilizer}</td>
-  <td>{a.limeDisplay || a.lime}</td>
-  <td>{a.inoculationDisplay || a.inoculation}</td>
-</tr>
-                ))}
-              </tbody>
-            </table>
+        )}
+ 
+        {/* Alternatives */}
+        {alternatives.length > 0 && (
+          <div className="agri-card p-5 mb-5">
+            <h3 className="font-semibold mb-3">Other mixes we tested</h3>
+            <div className="agri-table-wrap">
+              <table className="agri-table">
+                <thead>
+                  <tr>
+                    <th>Fertilizer</th>
+                    <th>Lime</th>
+                    <th>Seed treatment</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {alternatives.map((a, i) => (
+                    <tr key={i}>
+                      <td>{a.fertilizerDisplay || a.fertilizer}</td>
+                      <td>{a.limeDisplay || a.lime}</td>
+                      <td>{a.inoculationDisplay || a.inoculation}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
+        )}
+ 
+        {result.disclaimer && (
+          <div
+            className="p-3 rounded mb-5 text-xs"
+            style={{ background: "var(--surface-alt)", color: "var(--text-muted)" }}
+          >
+            {result.disclaimer}
+          </div>
+        )}
+ 
+        <div className="flex gap-3">
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setResult(null);
+              if (onResult) onResult(null);
+            }}
+          >
+            Try another farm
+          </Button>
+          {/* the route name must match a case in renderPage */}
+          <Button variant="secondary" icon={ShoppingBag} onClick={() => goto("marketplace")}>
+            Browse all inputs
+          </Button>
         </div>
-      )}
-
-      {result.disclaimer && (
-        <div className="p-3 rounded mb-5 text-xs"
-             style={{ background: "var(--surface-alt)", color: "var(--text-muted)" }}>
-          {result.disclaimer}
-        </div>
-      )}
-
-      <div className="flex gap-3">
-        <Button variant="secondary" onClick={() => setResult(null)}>Try another farm</Button>
-        <Button icon={ShoppingBag} onClick={() => goto("marketplace")}>
-  Buy these inputs
-</Button>
       </div>
-    </div>
-  );
-}
-
+    );
+  }
+ 
   return (
     <div className="max-w-xl">
-     <SectionHeading
-  eyebrow="Smart Advice"
-  title="Get advice for your farm"
-  subtitle="Tell us three things — we'll suggest the best inputs to use."
-/>
-
+      <SectionHeading
+        eyebrow="Smart Advice"
+        title="Get advice for your farm"
+        subtitle="Tell us three things and we'll suggest the best inputs to use."
+      />
+ 
       <div className="agri-card p-5 space-y-4">
-        <Field label="Bean variety" hint="Names in brackets are the KALRO official line codes.">
-          <select className="agri-select" value={form.beanVariety} onChange={(e) => update("beanVariety", e.target.value)}>
+        <Field label="Bean variety" hint="The code after each name is the trial line code.">
+          <select
+            className="agri-select"
+            value={form.beanVariety}
+            onChange={(e) => update("beanVariety", e.target.value)}
+          >
             {BEAN_VARIETIES.map((v) => (
-              <option key={v.value} value={v.value}>{v.label}  ·  {v.code}</option>
+              <option key={v.value} value={v.value}>
+                {v.label}  ·  {v.code}
+              </option>
             ))}
           </select>
         </Field>
-
+ 
         <Field label="Season" hint="Which rains are you planting for?">
-          <select className="agri-select" value={form.season} onChange={(e) => update("season", e.target.value)}>
+          <select
+            className="agri-select"
+            value={form.season}
+            onChange={(e) => update("season", e.target.value)}
+          >
             <option>Long Rains</option>
             <option>Short Rains</option>
           </select>
         </Field>
-
-        <Field label="County" hint="Used for context — not fed to the model.">
-          <input className="agri-input" value={form.county} onChange={(e) => update("county", e.target.value)} placeholder="e.g. Machakos" />
+ 
+        <Field label="County" hint="We save this with your record. It doesn't change the advice.">
+          <input
+            className="agri-input"
+            value={form.county}
+            onChange={(e) => update("county", e.target.value)}
+            placeholder="e.g. Machakos"
+          />
         </Field>
-
+ 
         <Button className="agri-btn-block" onClick={submit} disabled={loading}>
-          {loading ? "Analysing…" : "Get Recommendation"}
+          {loading ? "Working it out…" : "Get Recommendation"}
         </Button>
       </div>
-
+ 
       <p className="text-xs mt-3" style={{ color: "var(--text-faint)" }}>
-        Recommendations come from a Random Forest model trained on 25 Kenyan bean trials (2010–2012).
-        The model ranks input packages against each other; absolute yield varies by site.
+        Recommendations come from a Random Forest model trained on 25 Kenyan bean trials
+        (2010–2012). The model ranks input packages against each other; absolute yield
+        varies by site.
       </p>
+ 
+      {/* Saved recommendations */}
+      {history.length > 0 && (
+        <div className="agri-card p-5 mt-5">
+          <h3 className="font-semibold mb-3">Your recent recommendations</h3>
+          <div className="space-y-3">
+            {history.slice(0, 5).map((h) => (
+              <button
+                key={h.rec_id}
+                type="button"
+                onClick={() => openFromHistory(h)}
+                className="w-full text-left p-3 rounded border flex items-center justify-between gap-3"
+                style={{ borderColor: "var(--border)", background: "#FBFBF8", cursor: "pointer" }}
+              >
+                <div className="min-w-0">
+                  <div className="font-semibold text-sm">
+                    {beanLabel(h.variety)} · {h.season}
+                  </div>
+                  <div className="text-xs" style={{ color: "var(--text-muted)" }}>
+                    {h.recommended_fertilizer || "—"}
+                    {h.recommended_lime ? ` · ${h.recommended_lime}` : ""}
+                  </div>
+                  <div className="text-xs mt-0.5" style={{ color: "var(--text-faint)" }}>
+                    {fmtDate(h.created_at)}
+                  </div>
+                </div>
+                <ChevronRight size={16} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-const CATEGORY_FILTERS = [
-  { id: "all", label: "All", icon: ShoppingBag },
-  ...INPUT_CATEGORIES,
-  { id: "produce", label: "Bean Produce", icon: Wheat },
-];
-
-function Marketplace({ goto, guest = false }) {
+function Marketplace({ goto, guest = false, initialSearch = ""}) {
   const { push } = useToast();
   const { confirm } = useModal();
   
@@ -1774,9 +1381,24 @@ function Marketplace({ goto, guest = false }) {
   const [sort, setSort] = useState("recent");
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
-
+const [search, setSearch] = useState(initialSearch || "");
   // Cart state
-  const [cart, setCart] = useState([]);
+  const [cart, setCart] = useState(() => {
+  try {
+    const raw = localStorage.getItem("beanlink_cart");
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+});
+
+useEffect(() => {
+  try {
+    localStorage.setItem("beanlink_cart", JSON.stringify(cart));
+  } catch {
+    // storage unavailable (private mode, quota); ignore
+  }
+}, [cart]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [checkoutItem, setCheckoutItem] = useState(null);
   const [checkoutQty, setCheckoutQty] = useState(1);
@@ -1785,7 +1407,9 @@ function Marketplace({ goto, guest = false }) {
   useEffect(() => {
     if (category !== "produce" && category !== "all") setVariety("all");
   }, [category]);
-
+useEffect(() => {
+  setSearch(initialSearch || "");
+}, [initialSearch]);
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -1809,7 +1433,13 @@ function Marketplace({ goto, guest = false }) {
 
   const showProduceFilters = category === "produce" || category === "all";
   const counties = ["all", ...new Set(listings.map((p) => p.location).filter(Boolean))];
-
+const visibleListings = React.useMemo(() => {
+  if (!search || search === "") return listings;
+  const q = search.toLowerCase();
+  return listings.filter((l) =>
+    `${l.title || ""} ${l.description || ""}`.toLowerCase().includes(q)
+  );
+}, [listings, search]);
   // Cart functions
   const addToCart = async (item) => {
     if (guest) {
@@ -1862,10 +1492,12 @@ function Marketplace({ goto, guest = false }) {
     );
   };
 
-  const removeFromCart = (id) => {
-    setCart((prevCart) => prevCart.filter((i) => i.listing_id !== id));
+ const removeFromCart = (id, { silent = false } = {}) => {
+  setCart((prevCart) => prevCart.filter((i) => i.listing_id !== id));
+  if (!silent) {
     push("Item removed from cart", "amber");
-  };
+  }
+};
 
   const cartTotalCount = cart.reduce((acc, item) => acc + item.cartQuantity, 0);
   const cartTotalPrice = cart.reduce(
@@ -1888,6 +1520,15 @@ function Marketplace({ goto, guest = false }) {
           title="Marketplace"
           subtitle="Browse bean produce, seeds, fertilizers, equipment and other farm inputs from verified farmers and suppliers."
         />
+        {goBack && (
+  <button
+    onClick={goBack}
+    className="flex items-center gap-1 text-sm mb-4"
+    style={{ color: "var(--primary)" }}
+  >
+    <ArrowLeft size={15} /> Back to your recommendation
+  </button>
+)}
         <button
           onClick={() => setIsCartOpen(true)}
           className="agri-btn agri-btn-secondary relative shrink-0"
@@ -1958,91 +1599,124 @@ function Marketplace({ goto, guest = false }) {
         </Field>
       </div>
 
-      {/* Listings Grid */}
-      {loading ? (
-        <PageSkeleton rows={6} />
-      ) : listings.length === 0 ? (
-        <EmptyState
-          icon={ShoppingBag}
-          title="No listings match these filters"
-          body="Try a different category or county, or check back later."
-        />
-      ) : (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {listings.map((p) => {
-            const isProduce = p.category === "produce";
-            const wheat = 
-              (isProduce
-                ? Wheat
-                : INPUT_CATEGORIES.find((c) => c.id === p.category)?.icon) || Package;
+    {/* Listings Grid */}
+{loading ? (
+  <PageSkeleton rows={6} />
+) : visibleListings.length === 0 ? (
+  search ? (
+    <EmptyState
+      icon={Package}
+      title={`No listings for "${search}"`}
+      body="This input isn't currently on the marketplace. Ask for it at your local agrovet using the recommended name."
+      action={
+        <Button variant="secondary" onClick={() => setSearch("")}>
+          Browse all listings
+        </Button>
+      }
+    />
+  ) : (
+    <EmptyState
+      icon={ShoppingBag}
+      title="No listings match these filters"
+      body="Try a different category or county, or check back later."
+    />
+  )
+) : (
+  <>
+    {search && (
+      <div
+        className="p-2.5 rounded mb-4 flex items-center justify-between text-sm"
+        style={{
+          background: "var(--primary-soft)",
+          border: "1px solid var(--primary-soft-border)",
+          color: "var(--primary-dark)",
+        }}
+      >
+        <span>Showing results for <strong>{search}</strong></span>
+        <button className="font-semibold underline" onClick={() => setSearch("")}>
+          Clear
+        </button>
+      </div>
+    )}
+    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {visibleListings.map((p) => {
+        const isProduce = p.category === "produce";
+        return (
+          <div key={p.listing_id} className="agri-card p-4 flex flex-col">
+            <div
+              className="w-full h-28 rounded mb-3 flex items-center justify-center"
+              style={{ background: "var(--surface-alt)" }}
+            >
+              <Wheat size={30} color="var(--primary)" />
+            </div>
 
-            return (
-              <div key={p.listing_id} className="agri-card p-4 flex flex-col">
+            <div className="mb-1">
+              {isProduce && (
                 <div
-                  className="w-full h-28 rounded mb-3 flex items-center justify-center"
-                  style={{ background: "var(--surface-alt)" }}
+                  className="text-[10px] font-bold uppercase tracking-wider mb-1"
+                  style={{ color: "var(--primary)" }}
                 >
-                  <Wheat size={30} color="var(--primary)" />
+                  Bean Produce
                 </div>
-
-                <div className="mb-1">
-                  {isProduce && (
-                    <div className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: "var(--primary)" }}>
-                      Bean Produce
-                    </div>
-                  )}
-                  <div className="font-semibold text-sm">
-                    {isProduce ? `${beanShort(p.variety)} Beans` : p.title}
-                  </div>
-                </div>
-
-                <div className="text-xs mb-2 flex items-center gap-1" style={{ color: "var(--text-muted)" }}>
-                  <MapPin size={11} /> {p.location || p.seller_county || "—"}
-                </div>
-
-                <div className="mb-3">
-                  {p.seller_name
-                    ? <Badge tone="green" icon={ShieldCheck}>{p.seller_name}</Badge>
-                    : <Badge tone="gray">Seller</Badge>}
-                </div>
-
-                <div className="flex items-center justify-between mb-3">
-                  <div className="mono font-bold">
-                    {fmtKES(p.price_per_unit)}
-                    <span className="text-xs font-normal" style={{ color: "var(--text-faint)" }}>
-                      /{isProduce ? "kg" : "unit"}
-                    </span>
-                  </div>
-                  <Badge tone={Number(p.quantity_available) > 0 ? "green" : "red"}>
-                    {Number(p.quantity_available) > 0
-                      ? `${Number(p.quantity_available)} ${isProduce ? "kg" : "in stock"}`
-                      : "Out of Stock"}
-                  </Badge>
-                </div>
-
-                <div className="mt-auto flex gap-2">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="agri-btn-block"
-                    onClick={() => goto(isProduce ? "produce-detail" : "input-detail", p)}
-                  >
-                    View Details
-                  </Button>
-                  <Button
-                    size="sm"
-                    className="agri-btn-block"
-                    disabled={Number(p.quantity_available) <= 0}
-                    onClick={() => addToCart(p)}
-                  >
-                    Add to Cart
-                  </Button>
-                </div>
+              )}
+              <div className="font-semibold text-sm">
+                {isProduce ? `${beanShort(p.variety)} Beans` : p.title}
               </div>
-            );
-          })}
-        </div>
-      )}
+            </div>
+
+            <div
+              className="text-xs mb-2 flex items-center gap-1"
+              style={{ color: "var(--text-muted)" }}
+            >
+              <MapPin size={11} /> {p.location || p.seller_county || "—"}
+            </div>
+
+            <div className="mb-3">
+              {p.seller_name ? (
+                <Badge tone="green" icon={ShieldCheck}>{p.seller_name}</Badge>
+              ) : (
+                <Badge tone="gray">Seller</Badge>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between mb-3">
+              <div className="mono font-bold">
+                {fmtKES(p.price_per_unit)}
+                <span className="text-xs font-normal" style={{ color: "var(--text-faint)" }}>
+                  /{isProduce ? "kg" : "unit"}
+                </span>
+              </div>
+              <Badge tone={Number(p.quantity_available) > 0 ? "green" : "red"}>
+                {Number(p.quantity_available) > 0
+                  ? `${Number(p.quantity_available)} ${isProduce ? "kg" : "in stock"}`
+                  : "Out of Stock"}
+              </Badge>
+            </div>
+
+            <div className="mt-auto flex gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                className="agri-btn-block"
+                onClick={() => goto(isProduce ? "produce-detail" : "input-detail", p)}
+              >
+                View Details
+              </Button>
+              <Button
+                size="sm"
+                className="agri-btn-block"
+                disabled={Number(p.quantity_available) <= 0}
+                onClick={() => addToCart(p)}
+              >
+                Add to Cart
+              </Button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  </>
+)}
 
       {/* Slide-out Cart Drawer Overlay */}
       {isCartOpen && (
@@ -2150,11 +1824,13 @@ function Marketplace({ goto, guest = false }) {
           quantity={checkoutQty}
           goto={goto}
           onClose={() => setPaymentOpen(false)}
-          onSuccess={() => {
-            push("Payment completed!", "green");
-            removeFromCart(checkoutItem.listing_id);
-            goto("orders");
-          }}
+         onSuccess={() => {
+  removeFromCart(checkoutItem.listing_id, { silent: true });
+  setCheckoutItem(null);
+  setPaymentOpen(false);
+  push("Payment completed!", "green");
+  goto("orders");
+}}
         />
       )}
     </div>
@@ -3974,19 +3650,36 @@ export default function App() {
     }
   }, []);
 
-  const goto = (p, item) => {
-    if (p === "register") {
-      setAuthMode("register");
-      setPage("login");
-    } else if (p === "login") {
-      setAuthMode("login");
-      setPage("login");
-    } else {
-      setPage(p);
-    }
-    setSelectedItem(item || null);
-    window.scrollTo?.(0, 0);
-  };
+ const goto = (p, item) => {
+  // If moving away from a page into a detail/marketplace, remember the origin
+  // so the destination can offer a "back" that actually returns here.
+  if (p === "marketplace" || p === "input-detail" || p === "produce-detail") {
+    setReturnTo({ page, item: selectedItem });
+  }
+
+  if (p === "register") {
+    setAuthMode("register");
+    setPage("login");
+  } else if (p === "login") {
+    setAuthMode("login");
+    setPage("login");
+  } else {
+    setPage(p);
+  }
+  setSelectedItem(item || null);
+  window.scrollTo?.(0, 0);
+};
+
+const goBack = () => {
+  if (returnTo) {
+    setPage(returnTo.page);
+    setSelectedItem(returnTo.item);
+    setReturnTo(null);
+  } else {
+    setPage("dashboard");
+  }
+  window.scrollTo?.(0, 0);
+};
 
   const goLogin = () => goto("login");
   const goRegister = () => goto("register");
@@ -4068,9 +3761,19 @@ export default function App() {
         if (role === "supplier") return <SupplierDashboard goto={goto} user={session} />;
         return <AdminDashboard goto={goto} />;
       case "recommendation":
-        return <InputRecommendation goto={goto} />;
-      case "marketplace":
-        return <Marketplace goto={goto} />;
+  return (
+    <InputRecommendation
+      goto={goto}
+    />
+  );
+case "marketplace":
+  return (
+    <Marketplace
+      goto={goto}
+      goBack={goBack}
+      initialSearch={selectedItem?.search || ""}
+    />
+  );
       case "input-detail":
         return <InputDetail item={selectedItem} goto={goto} />;
       case "produce-detail":

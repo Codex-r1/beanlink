@@ -1,7 +1,4 @@
-"""
-Train the BeanLink input recommendation model locally.
-Produces models/bean_model.pkl — no external dependency on Colab.
-"""
+
 import os
 import joblib
 import pandas as pd
