@@ -14,11 +14,13 @@ const adminRoutes = require('./routes/adminRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const app = express();
 const recommendationRoutes = require('./routes/recommendationRoutes');
+const reviewRoutes = require('./routes/reviewRoutes');
 
 app.use(cors());
 app.use(express.json());
 app.use('/api', paymentRoutes);
 app.use('/api', recommendationRoutes);
+app.use('/api', reviewRoutes);
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'api-gateway' });
 });

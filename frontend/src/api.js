@@ -126,7 +126,24 @@ export const setFulfillment = (id, payload) =>
 
 export const sellerAdvance = (id, action) =>
   request(`/orders/${id}/seller-advance`, { method: "PATCH", body: { action } });
+export const buyerConfirmDelivery = (id) =>
+  request(`/orders/${id}/confirm-delivery`, { method: "PATCH", body: {} });
 
-export const buyerConfirm = (id, pickup_code) =>
-  request(`/orders/${id}/confirm-receipt`, { method: "PATCH", body: { pickup_code } });
+export const sellerConfirmPickup = (id, pickup_code) =>
+  request(`/orders/${id}/confirm-pickup`, {
+    method: "PATCH",
+    body: { pickup_code },
+  });
 export const adminGetStats = () => request("/admin/stats");
+
+export const createReview = (txn_id, rating, comment) =>
+  request("/reviews", { method: "POST", body: { txn_id, rating, comment } });
+
+export const getReviewsForUser = (userId) =>
+  request(`/reviews/user/${userId}`, { auth: false });
+
+export const getRatingSummary = (userId) =>
+  request(`/reviews/user/${userId}/summary`, { auth: false });
+
+export const getReviewForOrder = (txnId) =>
+  request(`/reviews/order/${txnId}`);

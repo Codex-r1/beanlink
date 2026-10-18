@@ -4,7 +4,7 @@ import {
   User, Search, Bell, Menu, X, ChevronRight, ChevronLeft,
   MapPin, Calendar, CheckCircle2, Clock, AlertCircle, Plus,
   ArrowLeft, LogOut, Users, ShieldCheck, Flag, Leaf, Wheat,
-  Beaker, Tractor, ShieldAlert, PauseCircle, Trash2, Pencil, Info
+  Beaker, Tractor, ShieldAlert, PauseCircle, Trash2, Pencil, Info,Star
 } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -21,9 +21,11 @@ import {
   adminListUsers, adminVerifyUser,
   adminListPrices, adminCreatePrice,
   adminListReports,
-  initiateMpesaPush, getPaymentStatus,getOrder, setFulfillment, sellerAdvance, buyerConfirm,
-  adminGetStats
+  initiateMpesaPush, getPaymentStatus,getOrder, setFulfillment, sellerAdvance, buyerConfirmDelivery, sellerConfirmPickup,
+  adminGetStats, createReview,
+  getReviewForOrder,
 } from "./api";
+<<<<<<< Updated upstream
 
 /* ============================================================================
    DESIGN TOKENS
@@ -244,6 +246,29 @@ function ToastHost({ children }) {
 }
 /* ============================================================================
    PAYMENT MODAL — phone input → STK push → poll → confirm
+=======
+import { BEAN_VARIETIES, beanLabel, beanShort } from "./constants/varieties";
+import { INPUT_CATEGORIES, CATEGORY_FILTERS } from "./constants/inputCategories";
+import { NAV_BY_ROLE } from "./constants/nav";
+import { fmtKES, fmtDate, statusTone } from "./utility";
+import GlobalStyle from "./styles/GlobalStyles";
+import { ModalHost, useModal } from "./contexts/ModalContext";
+import Button from "./components/button"; 
+import Badge from "./components/Badge";
+import SectionHeading from "./components/SectionHeading";
+import HeroSlideshow from "./components/HeroSlideshow";
+import { ToastHost, useToast } from "./contexts/ToastContext";
+import PageSkeleton from "./components/PageSkeleton";
+import CountUp from "./components/CountUp";
+import EmptyState from "./components/EmptyState";
+import StatCard from "./components/StatCard";
+import Field from "./components/Field";
+import RecommendedInputCard from "./components/RecommendedInputCard";
+import StarRating from "./components/StarRating";
+import NotificationBell from "./components/NotificationBell";
+/* ============================================================================
+   PAYMENT MODAL
+>>>>>>> Stashed changes
    ========================================================================== */
 function PaymentModal({ open, listing, quantity, onClose, onSuccess, goto }) {
   const { push } = useToast();
@@ -867,7 +892,7 @@ function GuestHeader({ page, goto, goLogin, goRegister }) {
           <div className="w-8 h-8 flex items-center justify-center rounded" style={{ background: "var(--primary)" }}>
             <Sprout size={18} color="#fff" />
           </div>
-          Bean<span style={{ color: "var(--primary)" }}>Link</span>
+          <span> BeanLink</span>
         </button>
         <nav className="hidden md:flex items-center gap-6 text-sm font-medium" style={{ color: "var(--text-muted)" }}>
           {links.map((l) => {
@@ -1197,7 +1222,7 @@ function AppShell({ role, user, page, goto, onLogout, children }) {
     });
     if (ok) onLogout();
   };
-
+const loadOrders = async () => (await getOrders()).orders;
   return (
     <div className="agri-root min-h-screen flex">
       <aside className="hidden md:flex w-60 shrink-0 flex-col border-r" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
@@ -1231,10 +1256,7 @@ function AppShell({ role, user, page, goto, onLogout, children }) {
             <input className="agri-input" style={{ paddingLeft: 32 }} placeholder="Search produce, inputs, prices..." />
           </div>
           <div className="flex-1 sm:hidden font-bold">BeanLink</div>
-          <button className="relative" aria-label="Notifications">
-            <Bell size={19} style={{ color: "var(--text-muted)" }} />
-            <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full" style={{ background: "var(--amber)" }} />
-          </button>
+          <NotificationBell user={user} loadOrders={loadOrders} goto={goto} />
           <button className="flex items-center gap-2" onClick={() => goto("profile")}>
             <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold" style={{ background: "var(--primary-soft)", color: "var(--primary-dark)" }}>
               {user.full_name.split(" ").map((p) => p[0]).join("").slice(0, 2)}
@@ -1242,7 +1264,9 @@ function AppShell({ role, user, page, goto, onLogout, children }) {
             <span className="hidden md:block text-sm font-medium">{user.full_name}</span>
           </button>
         </header>
-        <main className="flex-1 p-4 md:p-7 pb-20 md:pb-7">{children}</main>
+        <main className="flex-1 p-4 md:p-7 pb-20 md:pb-7">
+        <div className="agri-page mx-auto w-full max-w-6xl">{children}</div>
+        </main>
       </div>
 
       <nav className="md:hidden fixed bottom-0 left-0 right-0 border-t flex z-20" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
@@ -1357,7 +1381,7 @@ function FarmerDashboard({ goto, user }) {
               View all <ChevronRight size={13} />
             </button>
           </div>
-          <p className="text-xs mb-4" style={{ color: "var(--text-faint)" }}>Recorded Market Prices — not a forecast</p>
+          <p className="text-xs mb-4" style={{ color: "var(--text-faint)" }}>Recorded Market Prices not a forecast</p>
           {latest ? (
             <div className="flex items-center justify-between p-3 rounded mb-4" style={{ background: "var(--surface-alt)" }}>
               <div>
@@ -1716,6 +1740,7 @@ function InputRecommendation({ goto }) {
   );
 }
 
+<<<<<<< Updated upstream
   return (
     <div className="max-w-xl">
      <SectionHeading
@@ -1764,17 +1789,26 @@ const CATEGORY_FILTERS = [
 ];
 
 function Marketplace({ goto, guest = false }) {
+=======
+/* ============================================================================
+   MARKET PRICES (KAMIS Format)
+   ========================================================================== */
+function MarketPrices({ guest, goto }) {
+>>>>>>> Stashed changes
   const { push } = useToast();
-  const { confirm } = useModal();
   
-  // Marketplace states
-  const [category, setCategory] = useState("all");
-  const [county, setCounty] = useState("all");
+  // Filter & Search States
   const [variety, setVariety] = useState("all");
-  const [sort, setSort] = useState("recent");
-  const [listings, setListings] = useState([]);
+  const [county, setCounty] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [entriesPerPage, setEntriesPerPage] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1);
+  
+  // Raw and Loaded Data States
+  const [rawRows, setRawRows] = useState([]);
   const [loading, setLoading] = useState(true);
 
+<<<<<<< Updated upstream
   // Cart state
   const [cart, setCart] = useState([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -1786,27 +1820,27 @@ function Marketplace({ goto, guest = false }) {
     if (category !== "produce" && category !== "all") setVariety("all");
   }, [category]);
 
+=======
+  // Fetch prices from backend API on mount
+>>>>>>> Stashed changes
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     (async () => {
       try {
-        const params = {};
-        if (category !== "all") params.category = category;
-        if (county !== "all") params.county = county;
-        if (variety !== "all") params.variety = variety;
-        if (sort !== "recent") params.sort = sort;
-        const data = await getMarketplace(params);
-        if (!cancelled) setListings(data.listings || []);
+        const data = await getPrices({});
+        if (cancelled) return;
+        setRawRows(data.prices || []);
       } catch (err) {
-        push(err.message || "Failed to load marketplace", "red");
+        push(err.message || "Failed to load prices", "red");
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
     return () => { cancelled = true; };
-  }, [category, county, variety, sort, push]);
+  }, [push]);
 
+<<<<<<< Updated upstream
   const showProduceFilters = category === "produce" || category === "all";
   const counties = ["all", ...new Set(listings.map((p) => p.location).filter(Boolean))];
 
@@ -1823,43 +1857,44 @@ function Marketplace({ goto, guest = false }) {
       if (ok) goto("login");
       return;
     }
+=======
+  // Dynamic Options for Dropdowns
+  const countyOptions = useMemo(() => {
+    return ["all", ...new Set(rawRows.map((r) => r.county).filter(Boolean))];
+  }, [rawRows]);
+>>>>>>> Stashed changes
 
-    setCart((prevCart) => {
-      const existingIndex = prevCart.findIndex((i) => i.listing_id === item.listing_id);
-      if (existingIndex > -1) {
-        const updated = [...prevCart];
-        const maxAvail = Number(item.quantity_available);
-        const newQty = updated[existingIndex].cartQuantity + 1;
-        if (newQty > maxAvail) {
-          push(`Maximum available stock reached (${maxAvail})`, "amber");
-          return prevCart;
-        }
-        updated[existingIndex].cartQuantity = newQty;
-        return updated;
-      }
-      return [...prevCart, { ...item, cartQuantity: 1 }];
+  // Client-Side Filter Engine
+  const filteredRows = useMemo(() => {
+    return rawRows.filter((r) => {
+      const matchVariety = variety === "all" || r.bean_variety === variety;
+      const matchCounty = county === "all" || r.county === county;
+      const q = searchQuery.toLowerCase();
+      const matchSearch =
+        !q ||
+        (r.market_name && r.market_name.toLowerCase().includes(q)) ||
+        (r.bean_variety && r.bean_variety.toLowerCase().includes(q)) ||
+        (r.county && r.county.toLowerCase().includes(q));
+
+      return matchVariety && matchCounty && matchSearch;
     });
+  }, [rawRows, variety, county, searchQuery]);
 
-    push(`${item.title || beanLabel(item.variety)} added to cart`, "green");
-  };
+  // Pagination Calculations
+  const totalPages = Math.ceil(filteredRows.length / entriesPerPage) || 1;
+  const paginatedRows = useMemo(() => {
+    const startIndex = (currentPage - 1) * entriesPerPage;
+    return filteredRows.slice(startIndex, startIndex + entriesPerPage);
+  }, [filteredRows, currentPage, entriesPerPage]);
 
-  const updateCartQuantity = (id, delta) => {
-    setCart((prevCart) =>
-      prevCart
-        .map((item) => {
-          if (item.listing_id === id) {
-            const maxAvail = Number(item.quantity_available);
-            const target = item.cartQuantity + delta;
-            if (target > maxAvail) {
-              push(`Maximum available stock reached (${maxAvail})`, "amber");
-              return item;
-            }
-            return { ...item, cartQuantity: target };
-          }
-          return item;
-        })
-        .filter((item) => item.cartQuantity > 0)
+  // CSV Export Handler
+  const handleExportCSV = () => {
+    const headers = ["Commodity,Classification,Grade,Sex,Market,Wholesale,Retail,Supply Volume,County,Date,Source"];
+    const csvRows = filteredRows.map(
+      (r) =>
+        `"${r.bean_variety || '-'}","-","-","-","${r.market_name || '-'}","${r.wholesale_price ? fmtKES(r.wholesale_price) + '/Kg' : '-'}","${r.price_per_kg ? fmtKES(r.price_per_kg) + '/Kg' : '-'}","${r.supply_volume || '-'}","${r.county || '-'}","${r.recorded_date ? fmtDate(r.recorded_date) : '-'}","${r.source || 'KAMIS'}"`
     );
+<<<<<<< Updated upstream
   };
 
   const removeFromCart = (id) => {
@@ -2155,12 +2190,216 @@ function Marketplace({ goto, guest = false }) {
             removeFromCart(checkoutItem.listing_id);
             goto("orders");
           }}
+=======
+    const blob = new Blob([[headers, ...csvRows].join("\n")], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `KAMIS_Bean_Prices_${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+  };
+
+  return (
+    <div className="space-y-5 font-sans">
+      <SectionHeading
+        title="Bean Market Prices"
+        subtitle="National agricultural commodity price observations sourced from KAMIS."
+      />
+
+      {/* Guest Alert Banner */}
+      {guest && (
+        <div
+          className="p-3 rounded text-sm flex items-center gap-2"
+          style={{ background: "var(--amber-soft)", color: "var(--amber)", border: "1px solid var(--amber-border)" }}
+        >
+          <Info size={15} /> You're viewing public market data.{" "}
+          <button className="font-semibold underline" onClick={() => goto("register")}>Register</button> or{" "}
+          <button className="font-semibold underline" onClick={() => goto("login")}>Log in</button> to access your dashboard.
+        </div>
+      )}
+
+      {/* KAMIS Filter Bar */}
+      <div className="agri-card p-4 space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+          {/* Bean Variety Filter */}
+          <Field label="Product / Variety">
+            <select
+              className="agri-select"
+              value={variety}
+              onChange={(e) => { setVariety(e.target.value); setCurrentPage(1); }}
+            >
+              <option value="all">All Commodities</option>
+              {BEAN_VARIETIES.map((v) => (
+                <option key={v.value} value={v.value}>
+                  {v.label} · {v.code}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          {/* County / Location Filter */}
+          <Field label="County / Location">
+            <select
+              className="agri-select"
+              value={county}
+              onChange={(e) => { setCounty(e.target.value); setCurrentPage(1); }}
+            >
+              <option value="all">All Counties</option>
+              {countyOptions.filter((c) => c !== "all").map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </Field>
+
+          {/* Entries per page */}
+          <Field label="Entries per page">
+            <select
+              className="agri-select"
+              value={entriesPerPage}
+              onChange={(e) => { setEntriesPerPage(Number(e.target.value)); setCurrentPage(1); }}
+            >
+              <option value={10}>10</option>
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+              <option value={500}>500</option>
+            </select>
+          </Field>
+
+          {/* Market Search */}
+          <Field label="Search Market">
+            <input
+              type="text"
+              className="agri-input"
+              placeholder="Search market or county..."
+              value={searchQuery}
+              onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+            />
+          </Field>
+        </div>
+
+        {/* Action Row: Pagination Controls & Export Button */}
+        <div className="flex flex-col sm:flex-row justify-between items-center pt-3 border-t border-gray-200 gap-3">
+          {/* Page Buttons */}
+          <div className="flex items-center space-x-1 text-sm font-medium">
+            <button
+              onClick={() => setCurrentPage(1)}
+              disabled={currentPage === 1}
+              className="px-2.5 py-1 border rounded hover:bg-gray-100 disabled:opacity-40"
+            >
+              «
+            </button>
+            <button
+              onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              className="px-2.5 py-1 border rounded hover:bg-gray-100 disabled:opacity-40"
+            >
+              &lt;
+            </button>
+
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+              <button
+                key={p}
+                onClick={() => setCurrentPage(p)}
+                className={`px-3 py-1 border rounded ${
+                  currentPage === p
+                    ? "bg-emerald-700 border-emerald-700 text-white font-bold"
+                    : "border-gray-300 text-emerald-800 hover:bg-gray-50"
+                }`}
+              >
+                {p}
+              </button>
+            ))}
+
+            <button
+              onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages}
+              className="px-2.5 py-1 border rounded hover:bg-gray-100 disabled:opacity-40"
+            >
+              &gt;
+            </button>
+            <button
+              onClick={() => setCurrentPage(totalPages)}
+              disabled={currentPage === totalPages}
+              className="px-2.5 py-1 border rounded hover:bg-gray-100 disabled:opacity-40"
+            >
+              »
+            </button>
+          </div>
+
+          {/* KAMIS Style Export Button */}
+          <button
+            onClick={handleExportCSV}
+            className="px-4 py-1.5 border border-emerald-700 text-emerald-800 bg-white hover:bg-emerald-50 rounded text-sm font-medium transition-colors shadow-sm"
+          >
+            Export to Excel / CSV
+          </button>
+        </div>
+      </div>
+
+      {/* Main Table View */}
+      {loading ? (
+        <PageSkeleton rows={5} />
+      ) : paginatedRows.length === 0 ? (
+        <EmptyState
+          icon={TrendingUp}
+          title="No price records found"
+          body="No price observations match your selected variety, county, or search query."
+>>>>>>> Stashed changes
         />
+      ) : (
+        <div className="agri-card overflow-hidden">
+          <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200">
+            <h3 className="text-sm font-bold text-emerald-800 border-b-2 border-emerald-700 inline-block pb-0.5">
+              Data Observations
+            </h3>
+          </div>
+
+          <div className="agri-table-wrap">
+            <table className="agri-table">
+              <thead>
+                <tr>
+                  <th>Commodity</th>
+                  <th>Classification</th>
+                  <th>Grade</th>
+                  <th>Sex</th>
+                  <th>Market</th>
+                  <th>Wholesale</th>
+                  <th>Retail</th>
+                  <th>Supply Volume</th>
+                  <th>County</th>
+                  <th>Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginatedRows.map((r, i) => (
+                  <tr key={i}>
+                    <td className="font-medium">{r.bean_variety}</td>
+                    <td className="text-gray-400">{r.classification || "-"}</td>
+                    <td className="text-gray-400">{r.grade || "-"}</td>
+                    <td className="text-gray-400">{r.sex || "-"}</td>
+                    <td className="font-semibold text-gray-900">{r.market_name}</td>
+                    <td className="mono">{r.wholesale_price ? `${fmtKES(r.wholesale_price)}/Kg` : "-"}</td>
+                    <td className="mono font-semibold text-emerald-800">{`${fmtKES(r.price_per_kg)}/Kg`}</td>
+                    <td className="mono">{r.supply_volume || "-"}</td>
+                    <td className="font-medium">{r.county || "-"}</td>
+                    <td className="text-gray-500">{fmtDate(r.recorded_date)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Table Footer */}
+          <div className="p-3 bg-gray-50 border-t border-gray-200 text-xs text-gray-500 flex justify-between items-center">
+            <span>Showing {paginatedRows.length} of {filteredRows.length} entries</span>
+            <span>Source: Ministry of Agriculture / KAMIS Portal</span>
+          </div>
+        </div>
       )}
     </div>
   );
 }
-
 function InputDetail({ item, goto, guest = false }) {
   const { push } = useToast();
   const { open, confirm } = useModal();
@@ -2478,6 +2717,12 @@ function OrderDetail({ orderId, goto, user }) {
   const [pickupInput, setPickupInput] = useState("");
   const [working, setWorking] = useState(false);
 
+  // Review state
+  const [rating, setRating] = useState(0);
+  const [reviewComment, setReviewComment] = useState("");
+  const [existingReview, setExistingReview] = useState(null);
+  const [reviewLoading, setReviewLoading] = useState(false);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -2491,6 +2736,28 @@ function OrderDetail({ orderId, goto, user }) {
   }, [orderId, push]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Load any existing review for this order, if the caller is the buyer.
+  useEffect(() => {
+    if (!order || !user) return;
+    if (order.buyer_id !== user.user_id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await getReviewForOrder(order.txn_id);
+        if (!cancelled) {
+          setExistingReview(data.review);
+          if (data.review) {
+            setRating(data.review.rating);
+            setReviewComment(data.review.comment || "");
+          }
+        }
+      } catch {
+        // ignore
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [order?.txn_id, user?.user_id]);
 
   if (loading) return <PageSkeleton rows={2} />;
   if (!order) return null;
@@ -2532,18 +2799,56 @@ function OrderDetail({ orderId, goto, user }) {
   const confirmReceipt = async () => {
     setWorking(true);
     try {
-      await buyerConfirm(order.txn_id, order.fulfillment_method === "pickup" ? pickupInput : null);
+      await buyerConfirmDelivery(order.txn_id);
       open({
         tone: "success",
-        title: "Receipt confirmed",
+        title: "Delivery confirmed",
         body: "Order marked as delivered. Thank you for using BeanLink.",
         confirmLabel: "Done",
       });
       load();
     } catch (err) {
-      push(err.message || "Failed to confirm receipt", "red");
+      push(err.message || "Failed to confirm delivery", "red");
     } finally {
       setWorking(false);
+    }
+  };
+
+  const sellerConfirmReceipt = async () => {
+    setWorking(true);
+    try {
+      await sellerConfirmPickup(order.txn_id, pickupInput);
+      open({
+        tone: "success",
+        title: "Handover confirmed",
+        body: "Order marked as delivered. Thank you for using BeanLink.",
+        confirmLabel: "Done",
+      });
+      load();
+    } catch (err) {
+      push(err.message || "Failed to confirm handover", "red");
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  const submitReview = async () => {
+    if (rating < 1) return;
+    setReviewLoading(true);
+    try {
+      await createReview(order.txn_id, rating, reviewComment || null);
+      const refreshed = await getReviewForOrder(order.txn_id);
+      setExistingReview(refreshed.review);
+      open({
+        tone: "success",
+        title: "Review submitted",
+        body: "Thank you for leaving a review. Your feedback helps other buyers.",
+        confirmLabel: "Done",
+      });
+    } catch (err) {
+      push(err.message || "Failed to submit review", "red");
+    } finally {
+      setReviewLoading(false);
     }
   };
 
@@ -2628,8 +2933,7 @@ function OrderDetail({ orderId, goto, user }) {
         </div>
 
         {/* Counterparty */}
-        <div className="p-3 rounded mb-4"
-             style={{ background: "var(--surface-alt)", fontSize: 13 }}>
+        <div className="p-3 rounded mb-4" style={{ background: "var(--surface-alt)", fontSize: 13 }}>
           <div className="text-xs mb-0.5" style={{ color: "var(--text-faint)" }}>
             {isBuyer ? "Seller" : "Buyer"}
           </div>
@@ -2646,17 +2950,24 @@ function OrderDetail({ orderId, goto, user }) {
           && order.pickup_code
           && isBuyer
           && order.fulfillment_status !== "delivered" && (
-          <div className="p-4 rounded mb-4"
-               style={{ background: "var(--primary-soft)", border: "1px solid var(--primary-soft-border)" }}>
-            <div className="text-xs font-semibold uppercase tracking-wide mb-1"
-                 style={{ color: "var(--primary)" }}>
-              Pickup code — show this to the seller
+            <div
+              className="p-4 rounded mb-4"
+              style={{ background: "var(--primary-soft)", border: "1px solid var(--primary-soft-border)" }}
+            >
+              <div
+                className="text-xs font-semibold uppercase tracking-wide mb-1"
+                style={{ color: "var(--primary)" }}
+              >
+                Pickup code — show this to the seller
+              </div>
+              <div
+                className="mono text-3xl font-bold"
+                style={{ color: "var(--primary-dark)", letterSpacing: 4 }}
+              >
+                {order.pickup_code}
+              </div>
             </div>
-            <div className="mono text-3xl font-bold" style={{ color: "var(--primary-dark)", letterSpacing: 4 }}>
-              {order.pickup_code}
-            </div>
-          </div>
-        )}
+          )}
 
         {/* Seller actions */}
         {isSeller && order.fulfillment_status === "awaiting_seller" && (
@@ -2668,7 +2979,7 @@ function OrderDetail({ orderId, goto, user }) {
                 onClick={() => sellerAction("ready_for_pickup", "Mark ready for pickup?", {
                   tone: "info",
                   title: "Mark ready for pickup?",
-                  body: "The buyer will see a pickup code they'll show you on collection.",
+                  body: "The buyer will see a pickup code they will show you at collection.",
                   confirmLabel: "Mark ready",
                   cancelLabel: "Cancel",
                 })}
@@ -2693,29 +3004,49 @@ function OrderDetail({ orderId, goto, user }) {
           </div>
         )}
 
-        {/* Buyer confirmation */}
+        {/* Seller confirms pickup by entering the code the buyer shows */}
+        {isSeller
+          && order.fulfillment_method === "pickup"
+          && order.fulfillment_status === "ready_for_pickup" && (
+            <div className="space-y-3 mt-4">
+              <Field
+                label="Enter the pickup code the buyer shows you"
+                hint="Only confirm once you have physically handed over the goods."
+              >
+                <input
+                  className="agri-input mono"
+                  value={pickupInput}
+                  onChange={(e) => setPickupInput(e.target.value.toUpperCase())}
+                  placeholder="e.g. A3K9P2"
+                  maxLength={6}
+                />
+              </Field>
+              <Button
+                className="agri-btn-block"
+                disabled={working || pickupInput.length < 4}
+                onClick={sellerConfirmReceipt}
+              >
+                {working ? "Confirming…" : "Confirm handover"}
+              </Button>
+            </div>
+          )}
+
+        {/* Buyer confirmation — delivery only */}
         {isBuyer && order.fulfillment_status !== "delivered" && (
           <div className="space-y-3 mt-4">
-            {order.fulfillment_method === "pickup" && order.fulfillment_status === "ready_for_pickup" && (
-              <>
-                <Field label="Enter the pickup code to confirm collection">
-                  <input
-                    className="agri-input mono"
-                    value={pickupInput}
-                    onChange={(e) => setPickupInput(e.target.value.toUpperCase())}
-                    placeholder="e.g. A3K9P2"
-                    maxLength={6}
-                  />
-                </Field>
-                <Button className="agri-btn-block" disabled={working || pickupInput.length < 4} onClick={confirmReceipt}>
-                  {working ? "Confirming…" : "Confirm receipt"}
-                </Button>
-              </>
-            )}
             {order.fulfillment_method === "delivery" && order.fulfillment_status === "dispatched" && (
               <Button className="agri-btn-block" disabled={working} onClick={confirmReceipt}>
                 {working ? "Confirming…" : "Confirm delivery received"}
               </Button>
+            )}
+            {order.fulfillment_method === "pickup" && order.fulfillment_status === "ready_for_pickup" && (
+              <div
+                className="p-3 rounded text-sm"
+                style={{ background: "var(--surface-alt)", color: "var(--text-muted)" }}
+              >
+                Show the pickup code above to the seller when you collect your order.
+                The order will be marked as delivered once they confirm the handover.
+              </div>
             )}
             {order.fulfillment_status === "awaiting_seller" && (
               <div className="text-xs text-center" style={{ color: "var(--text-faint)" }}>
@@ -2728,19 +3059,72 @@ function OrderDetail({ orderId, goto, user }) {
         )}
 
         {order.fulfillment_status === "delivered" && (
-          <div className="p-3 rounded text-sm flex items-center gap-2 mt-4"
-               style={{ background: "var(--primary-soft)", border: "1px solid var(--primary-soft-border)", color: "var(--primary-dark)" }}>
+          <div
+            className="p-3 rounded text-sm flex items-center gap-2 mt-4"
+            style={{
+              background: "var(--primary-soft)",
+              border: "1px solid var(--primary-soft-border)",
+              color: "var(--primary-dark)",
+            }}
+          >
             <CheckCircle2 size={16} />
             Delivered {fmtDate(order.delivered_at)}
           </div>
         )}
+
+        {/* Buyer review — only after delivery and only if the caller is the buyer */}
+        {isBuyer
+          && (order.status === "completed" || order.fulfillment_status === "delivered") && (
+            <div className="mt-4 pt-4 border-t" style={{ borderColor: "var(--border)" }}>
+              {existingReview ? (
+                <>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-sm font-semibold">Your review</span>
+                  </div>
+                  <StarRating value={existingReview.rating} readOnly />
+                  {existingReview.comment && (
+                    <p className="text-sm mt-2" style={{ color: "var(--text-muted)" }}>
+                      "{existingReview.comment}"
+                    </p>
+                  )}
+                  <p className="text-xs mt-2" style={{ color: "var(--text-faint)" }}>
+                    Submitted {fmtDate(existingReview.created_at)}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="text-sm font-semibold mb-2">
+                    How was this order with {order.seller_name}?
+                  </div>
+                  <StarRating value={rating} onChange={setRating} size={22} />
+                  <div className="mt-3">
+                    <Field label="Comment (optional)">
+                      <textarea
+                        className="agri-textarea"
+                        rows={3}
+                        value={reviewComment}
+                        onChange={(e) => setReviewComment(e.target.value)}
+                        placeholder="Was the produce as described? Was pickup or delivery smooth?"
+                      />
+                    </Field>
+                  </div>
+                  <Button
+                    className="agri-btn-block mt-3"
+                    disabled={rating < 1 || reviewLoading}
+                    onClick={submitReview}
+                  >
+                    {reviewLoading ? "Submitting…" : "Submit review"}
+                  </Button>
+                </>
+              )}
+            </div>
+          )}
       </div>
     </div>
   );
 }
-/* ============================================================================
-   MY PRODUCE
-   ========================================================================== */
+
+  
 function MyListings({ goto, role }) {
   const { push } = useToast();
   const { confirm, open } = useModal();
@@ -3097,126 +3481,6 @@ function ListForm({ goto, role }) {
 }
 
 /* ============================================================================
-   MARKET PRICES
-   ========================================================================== */
-function MarketPrices({ guest, goto }) {
-  const { push } = useToast();
-  const [variety, setVariety] = useState("Kenya Umoja");
-  const [county, setCounty] = useState("all");
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    (async () => {
-      try {
-        const params = { variety };
-        if (county !== "all") params.county = county;
-        const data = await getPrices(params);
-        if (cancelled) return;
-        setRows((data.prices || []).slice().sort((a, b) => new Date(a.recorded_date) - new Date(b.recorded_date)));
-      } catch (err) {
-        push(err.message || "Failed to load prices", "red");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [variety, county, push]);
-
-  const chartData = rows.map((r) => ({ date: String(r.recorded_date).slice(5), price: Number(r.price_per_kg) }));
-  const latest = rows[rows.length - 1];
-  const prev = rows[rows.length - 2];
-
-  return (
-    <div>
-      <SectionHeading title="Bean Market Prices" subtitle="View recorded bean prices across selected markets and time periods." />
-      {guest && (
-        <div className="p-3 rounded mb-5 text-sm flex items-center gap-2" style={{ background: "var(--amber-soft)", color: "var(--amber)", border: "1px solid var(--amber-border)" }}>
-          <Info size={15} /> You're viewing public market data.{" "}
-          <button className="font-semibold underline" onClick={() => goto("register")}>Register</button> or{" "}
-          <button className="font-semibold underline" onClick={() => goto("login")}>Log in</button> to access your dashboard.
-        </div>
-      )}
-      <div className="agri-card p-4 mb-5 grid sm:grid-cols-4 gap-3">
-        <Field label="Bean variety">
-          <select className="agri-select" value={variety} onChange={(e) => setVariety(e.target.value)}>
-            {BEAN_VARIETIES.map((v) => (
-              <option key={v.value} value={v.value}>{v.label} · {v.code}</option>
-            ))}
-          </select>
-        </Field>
-        <Field label="County">
-          <select className="agri-select" value={county} onChange={(e) => setCounty(e.target.value)}>
-            <option value="all">All counties</option>
-            {[...new Set(rows.map((r) => r.county).filter(Boolean))].map((c) => (
-              <option key={c}>{c}</option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Market"><input className="agri-input" placeholder="All markets" disabled /></Field>
-        <Field label="Date range"><input className="agri-input" placeholder="All records" disabled /></Field>
-      </div>
-      {loading ? (
-        <PageSkeleton rows={3} />
-      ) : rows.length === 0 ? (
-        <EmptyState icon={TrendingUp} title="No recorded prices" body="There are no recorded prices for this variety yet." />
-      ) : (
-        <>
-          <div className="grid sm:grid-cols-4 gap-3 mb-6">
-            <StatCard label="Current Recorded Price" value={`${fmtKES(latest.price_per_kg)}/kg`} icon={TrendingUp} />
-            <StatCard label="Previous Recorded Price" value={prev ? `${fmtKES(prev.price_per_kg)}/kg` : "—"} icon={Clock} />
-            <StatCard label="Market" value={latest.market_name} icon={MapPin} mono={false} />
-            <StatCard label="Last Updated" value={fmtDate(latest.recorded_date)} icon={Calendar} mono={false} />
-          </div>
-          <div className="agri-card p-5 mb-6">
-            <div className="flex items-center justify-between mb-1">
-              <h3 className="font-semibold">Price History</h3>
-              <Badge tone="gray">Recorded Market Prices</Badge>
-            </div>
-            <p className="text-xs mb-4" style={{ color: "var(--text-faint)" }}>
-              Historical prices recorded in the database — this is not a price prediction.
-            </p>
-            <div style={{ width: "100%", height: 220 }}>
-              <ResponsiveContainer>
-                <LineChart data={chartData} margin={{ left: -20, right: 10, top: 5 }}>
-                  <CartesianGrid stroke="var(--border)" vertical={false} />
-                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: "var(--text-faint)" }} axisLine={{ stroke: "var(--border)" }} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: "var(--text-faint)" }} axisLine={false} tickLine={false} width={45} />
-                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 4, border: "1px solid var(--border)" }} formatter={(v) => [`KES ${v}`, "Price/kg"]} />
-                  <Line type="monotone" dataKey="price" stroke="var(--primary)" strokeWidth={2} dot={{ r: 3 }} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-          <div className="agri-card">
-            <div className="agri-table-wrap">
-              <table className="agri-table">
-                <thead>
-                  <tr><th>Market</th><th>Bean Variety</th><th>Price/kg</th><th>Date</th><th>Source</th></tr>
-                </thead>
-                <tbody>
-                  {[...rows].reverse().map((r, i) => (
-                    <tr key={i}>
-                      <td>{r.market_name}</td>
-                      <td>{beanShort(r.bean_variety)}</td>
-                      <td className="mono font-semibold">{fmtKES(r.price_per_kg)}</td>
-                      <td>{fmtDate(r.recorded_date)}</td>
-                      <td><Badge tone="gray">{r.source}</Badge></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-/* ============================================================================
    ORDERS
    ========================================================================== */
 function Orders({ goto, user }) {
@@ -3229,7 +3493,7 @@ function Orders({ goto, user }) {
 
   // Farmers and suppliers see orders for their products (they're the seller).
   // Buyers see orders they placed (they're the buyer).
-const myRole = user?.role === "buyer" ? "buyer" : user?.role === "admin" ? "all" : "seller";
+const myRole = "all";
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -3785,17 +4049,36 @@ function AdminDashboard({ goto }) {
   );
 }
 
+/* ============================================================================
+   ADMIN MARKET PRICES DATA MANAGEMENT (Bulk KAMIS Upload + Manual Entry)
+   ========================================================================== */
 function AdminMarketPrices() {
   const { push } = useToast();
   const { open } = useModal();
+  
+  // State for Price Records Table
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  // Bulk Upload States
+  const [csvFile, setCsvFile] = useState(null);
+  const [bulkPreviewCount, setBulkPreviewCount] = useState(0);
+
+  // Manual Form State
   const [form, setForm] = useState({
-    market_name: "", county: "", bean_variety: "Kenya Umoja", price_per_kg: "", recorded_date: "", source: "",
+    market_name: "",
+    county: "",
+    bean_variety: "Kenya Umoja",
+    price_per_kg: "",
+    recorded_date: "",
+    source: "KAMIS",
   });
+
   const update = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
+  // Fetch all price records
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -3808,11 +4091,14 @@ function AdminMarketPrices() {
     }
   }, [push]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
+  // Handle Single Record Manual Save
   const addRecord = async () => {
     if (!form.market_name || !form.price_per_kg || !form.recorded_date) {
-      push("Please fill market, price, and date", "amber");
+      push("Please fill market, price, and date fields", "amber");
       return;
     }
     setSaving(true);
@@ -3823,15 +4109,22 @@ function AdminMarketPrices() {
         bean_variety: form.bean_variety,
         price_per_kg: Number(form.price_per_kg),
         recorded_date: form.recorded_date,
-        source: form.source || "Manual entry",
+        source: form.source || "KAMIS Manual",
       });
       open({
         tone: "success",
         title: "Price record saved",
-        body: "The new record is now live on the public Market Prices page.",
+        body: "The new market price is now live on the public KAMIS dashboard.",
         confirmLabel: "Done",
       });
-      setForm({ market_name: "", county: "", bean_variety: "Kenya Umoja", price_per_kg: "", recorded_date: "", source: "" });
+      setForm({
+        market_name: "",
+        county: "",
+        bean_variety: "Kenya Umoja",
+        price_per_kg: "",
+        recorded_date: "",
+        source: "KAMIS",
+      });
       load();
     } catch (err) {
       open({
@@ -3845,48 +4138,237 @@ function AdminMarketPrices() {
     }
   };
 
+  // Handle Bulk CSV Selection & Parsing
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setCsvFile(file);
+
+    // Simple line counter for preview
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const lines = evt.target.result.split("\n").filter((l) => l.trim().length > 0);
+      setBulkPreviewCount(Math.max(0, lines.length - 1)); // subtract header line
+    };
+    reader.readAsText(file);
+  };
+
+  // Handle Bulk Import Upload Action
+  const handleBulkImport = async () => {
+    if (!csvFile) {
+      push("Please select a KAMIS CSV or Excel export file first", "amber");
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", csvFile);
+
+      // Call batch import API endpoint
+      await adminBatchImportPrices(formData);
+
+      open({
+        tone: "success",
+        title: "KAMIS Bulk Import Successful",
+        body: `Processed and imported ${bulkPreviewCount} price records into the database.`,
+        confirmLabel: "Great",
+      });
+
+      setCsvFile(null);
+      setBulkPreviewCount(0);
+      load();
+    } catch (err) {
+      open({
+        tone: "error",
+        title: "Bulk Import Failed",
+        body: err.message || "Ensure the CSV file columns match the KAMIS export format.",
+        confirmLabel: "Close",
+      });
+    } finally {
+      setUploading(false);
+    }
+  };
+
   return (
-    <div>
-      <SectionHeading title="Market Price Data Management" subtitle="Add and manage recorded bean market prices. This data feeds the public Market Price Dashboard." />
+    <div className="space-y-5">
+      <SectionHeading
+        title="Market Price Data Management"
+        subtitle="Upload bulk KAMIS CSV spreadsheets or manually add price records to feed the public Market Price Dashboard."
+      />
+
       <div className="grid lg:grid-cols-3 gap-5">
-        <div className="agri-card p-5 lg:col-span-1 h-fit">
-          <h3 className="font-semibold mb-4">Record a New Price</h3>
-          <div className="space-y-3">
-            <Field label="Market"><input className="agri-input" value={form.market_name} onChange={(e) => update("market_name", e.target.value)} placeholder="e.g. Nairobi" /></Field>
-            <Field label="County"><input className="agri-input" value={form.county} onChange={(e) => update("county", e.target.value)} placeholder="e.g. Nairobi" /></Field>
-            <Field label="Bean variety">
-              <select className="agri-select" value={form.bean_variety} onChange={(e) => update("bean_variety", e.target.value)}>
-                {BEAN_VARIETIES.map((v) => (
-                  <option key={v.value} value={v.value}>{v.label} · {v.code}</option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Price (KES)"><input className="agri-input" type="number" value={form.price_per_kg} onChange={(e) => update("price_per_kg", e.target.value)} /></Field>
-            <Field label="Date"><input className="agri-input" type="date" value={form.recorded_date} onChange={(e) => update("recorded_date", e.target.value)} /></Field>
-            <Field label="Data source"><input className="agri-input" placeholder="e.g. WFP, NCPB, field survey" value={form.source} onChange={(e) => update("source", e.target.value)} /></Field>
-            <Button className="agri-btn-block" onClick={addRecord} disabled={saving}>{saving ? "Saving…" : "Save Price Record"}</Button>
+        {/* Left Column: Management Tools */}
+        <div className="space-y-5 lg:col-span-1 h-fit">
+          
+          {/* BULK KAMIS CSV IMPORT CARD */}
+          <div className="agri-card p-5 border-emerald-200 bg-emerald-50/30">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="p-1 rounded bg-emerald-700 text-white font-bold text-xs">
+                KAMIS
+              </span>
+              <h3 className="font-semibold text-gray-900">Bulk CSV/Excel Upload</h3>
+            </div>
+            <p className="text-xs text-gray-600 mb-4">
+              Import price spreadsheets exported directly from the KAMIS portal (<code>kamis.kilimo.go.ke</code>).
+            </p>
+
+            <div className="space-y-3">
+              <Field label="Select KAMIS File">
+                <input
+                  type="file"
+                  accept=".csv, .xlsx"
+                  className="agri-input text-xs"
+                  onChange={handleFileSelect}
+                />
+              </Field>
+
+              {bulkPreviewCount > 0 && (
+                <div className="p-2.5 rounded bg-emerald-100 text-emerald-900 text-xs font-medium flex justify-between">
+                  <span>Detected Records:</span>
+                  <span className="font-bold">{bulkPreviewCount} rows</span>
+                </div>
+              )}
+
+              <Button
+                className="agri-btn-block bg-emerald-700 hover:bg-emerald-800 text-white"
+                onClick={handleBulkImport}
+                disabled={uploading || !csvFile}
+              >
+                {uploading ? "Importing Records..." : "Upload & Populate Dashboard"}
+              </Button>
+            </div>
           </div>
+
+          {/* SINGLE RECORD MANUAL ADD FORM */}
+          <div className="agri-card p-5">
+            <h3 className="font-semibold mb-3 text-gray-900">Manual Quick-Add</h3>
+            <p className="text-xs text-gray-500 mb-4">
+              Manually record a single price observation.
+            </p>
+
+            <div className="space-y-3">
+              <Field label="Market Name">
+                <input
+                  className="agri-input"
+                  value={form.market_name}
+                  onChange={(e) => update("market_name", e.target.value)}
+                  placeholder="e.g. Wakulima, Kerugoya"
+                />
+              </Field>
+
+              <Field label="County">
+                <input
+                  className="agri-input"
+                  value={form.county}
+                  onChange={(e) => update("county", e.target.value)}
+                  placeholder="e.g. Kirinyaga, Nairobi"
+                />
+              </Field>
+
+              <Field label="Bean Variety">
+                <select
+                  className="agri-select"
+                  value={form.bean_variety}
+                  onChange={(e) => update("bean_variety", e.target.value)}
+                >
+                  {BEAN_VARIETIES.map((v) => (
+                    <option key={v.value} value={v.value}>
+                      {v.label} · {v.code}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <Field label="Price (KES/kg)">
+                <input
+                  className="agri-input"
+                  type="number"
+                  placeholder="e.g. 140"
+                  value={form.price_per_kg}
+                  onChange={(e) => update("price_per_kg", e.target.value)}
+                />
+              </Field>
+
+              <Field label="Recorded Date">
+                <input
+                  className="agri-input"
+                  type="date"
+                  value={form.recorded_date}
+                  onChange={(e) => update("recorded_date", e.target.value)}
+                />
+              </Field>
+
+              <Field label="Data Source">
+                <input
+                  className="agri-input"
+                  placeholder="e.g. KAMIS, Field Survey"
+                  value={form.source}
+                  onChange={(e) => update("source", e.target.value)}
+                />
+              </Field>
+
+              <Button
+                className="agri-btn-block"
+                onClick={addRecord}
+                disabled={saving}
+              >
+                {saving ? "Saving…" : "Save Single Record"}
+              </Button>
+            </div>
+          </div>
+
         </div>
-        <div className="agri-card lg:col-span-2">
+
+        {/* Right Column: Existing Price Records Database Table */}
+        <div className="agri-card lg:col-span-2 overflow-hidden">
+          <div className="p-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
+            <h3 className="font-bold text-gray-800 text-sm">
+              Live Database Price Records
+            </h3>
+            <Badge tone="gray">{rows.length} Total Records</Badge>
+          </div>
+
           {loading ? (
-            <div className="p-5"><PageSkeleton rows={1} /></div>
+            <div className="p-5">
+              <PageSkeleton rows={3} />
+            </div>
           ) : rows.length === 0 ? (
-            <div className="p-5"><EmptyState icon={TrendingUp} title="No price records" body="Add the first price record using the form on the left." /></div>
+            <div className="p-5">
+              <EmptyState
+                icon={TrendingUp}
+                title="No price records in database"
+                body="Import a KAMIS CSV file or manually add a record using the forms on the left."
+              />
+            </div>
           ) : (
             <div className="agri-table-wrap">
               <table className="agri-table">
                 <thead>
-                  <tr><th>Market</th><th>County</th><th>Variety</th><th>Price/kg</th><th>Date</th><th>Source</th></tr>
+                  <tr>
+                    <th>Market</th>
+                    <th>County</th>
+                    <th>Variety</th>
+                    <th>Price/kg</th>
+                    <th>Date</th>
+                    <th>Source</th>
+                  </tr>
                 </thead>
                 <tbody>
-                  {rows.slice(0, 30).map((r) => (
+                  {rows.slice(0, 50).map((r) => (
                     <tr key={r.price_id}>
-                      <td>{r.market_name}</td>
+                      <td className="font-semibold text-gray-900">{r.market_name}</td>
                       <td>{r.county || "—"}</td>
                       <td>{beanShort(r.bean_variety)}</td>
-                      <td className="mono font-semibold">{fmtKES(r.price_per_kg)}</td>
-                      <td>{fmtDate(r.recorded_date)}</td>
-                      <td><Badge tone="gray">{r.source}</Badge></td>
+                      <td className="mono font-semibold text-emerald-800">
+                        {fmtKES(r.price_per_kg)}
+                      </td>
+                      <td className="text-gray-500">{fmtDate(r.recorded_date)}</td>
+                      <td>
+                        <Badge tone={r.source && r.source.includes("KAMIS") ? "green" : "gray"}>
+                          {r.source || "KAMIS"}
+                        </Badge>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -3898,7 +4380,6 @@ function AdminMarketPrices() {
     </div>
   );
 }
-
 function AdminReports() {
   const { push } = useToast();
   const [reports, setReports] = useState([]);
@@ -3952,7 +4433,7 @@ function GuestPage({ children, page, goto, goLogin, goRegister }) {
   return (
     <div className="agri-root min-h-screen">
       <GuestHeader page={page} goto={goto} goLogin={goLogin} goRegister={goRegister} />
-      <div className="max-w-6xl mx-auto p-4 md:p-7">{children}</div>
+      <div className="agri-page mx-auto w-full max-w-6xl p-4 md:p-7">{children}</div>
     </div>
   );
 }
@@ -3964,7 +4445,8 @@ export default function App() {
   const [page, setPage] = useState("landing");
   const [authMode, setAuthMode] = useState("login");
   const [selectedItem, setSelectedItem] = useState(null);
-
+  const [lastRecommendation, setLastRecommendation] = useState(null);
+  const [returnTo, setReturnTo] = useState(null);
   useEffect(() => {
     const token = localStorage.getItem("beanlink_token");
     const storedUser = localStorage.getItem("beanlink_user");

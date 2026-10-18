@@ -10,6 +10,7 @@ router.post('/orders', auth, ctrl.create);
 router.patch('/orders/:id/status', auth, ctrl.updateStatus);
 router.patch('/orders/:id/fulfillment', auth, ctrl.setFulfillment);
 router.patch('/orders/:id/seller-advance', auth, ctrl.sellerAdvance);
-router.patch('/orders/:id/confirm-receipt', auth, ctrl.buyerConfirm);
+router.patch('/orders/:id/confirm-delivery', auth, ctrl.buyerConfirmDelivery);
+router.patch('/orders/:id/confirm-pickup', auth, ctrl.sellerConfirmPickup);
 
 module.exports = router;
