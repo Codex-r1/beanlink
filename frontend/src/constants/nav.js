@@ -1,6 +1,6 @@
 import {
   Home, ShoppingBag, Sprout, Wheat, Plus, TrendingUp,
-  ClipboardList, Receipt, User, Users, Package, Flag, Beaker,
+  ClipboardList, Receipt, User, Users, Package, Flag, Beaker,Info
 } from "lucide-react";
 
 export const NAV_BY_ROLE = {
@@ -14,6 +14,7 @@ export const NAV_BY_ROLE = {
     { id: "orders",         label: "Orders",                icon: ClipboardList },
     { id: "transactions",   label: "Transactions",          icon: Receipt },
     { id: "profile",        label: "Profile",               icon: User },
+     { id: "faq", label: "Farmer FAQ", icon: Info },
   ],
   buyer: [
     { id: "dashboard",   label: "Dashboard",     icon: Home },
@@ -22,6 +23,7 @@ export const NAV_BY_ROLE = {
     { id: "orders",      label: "Orders",        icon: ClipboardList },
     { id: "transactions", label: "Transactions", icon: Receipt },
     { id: "profile",     label: "Profile",       icon: User },
+     
   ],
   supplier: [
     { id: "dashboard",   label: "Dashboard",     icon: Home },
@@ -39,5 +41,6 @@ export const NAV_BY_ROLE = {
     { id: "admin-prices", label: "Market Prices", icon: TrendingUp },
     { id: "transactions", label: "Transactions",  icon: Receipt },
     { id: "admin-reports", label: "Reports",      icon: Flag },
+    
   ],
 };

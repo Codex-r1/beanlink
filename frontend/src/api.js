@@ -130,3 +130,31 @@ export const sellerAdvance = (id, action) =>
 export const buyerConfirm = (id, pickup_code) =>
   request(`/orders/${id}/confirm-receipt`, { method: "PATCH", body: { pickup_code } });
 export const adminGetStats = () => request("/admin/stats");
+
+export const adminBatchImportPrices = (formData) => {
+  // Use your BASE variable and correct token key
+  const token = localStorage.getItem("beanlink_token"); 
+  
+  return fetch(`${BASE}/admin/prices/import-csv`, {
+    method: "POST",
+    headers: {
+      // Only send auth, DO NOT send Content-Type (browser sets it for FormData)
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: formData,
+  }).then(async (res) => {
+    if (!res.ok) {
+      const contentType = res.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        const err = await res.json();
+        throw new Error(err.error || err.message || "Failed to import");
+      } else {
+        const text = await res.text();
+        throw new Error(text.substring(0, 100) || `Server error: ${res.status}`);
+      }
+    }
+    return res.json();
+  });
+};
+export const verifyLoginOTP = (userId, otp) => 
+  request("/auth/verify-otp", { method: "POST", body: { userId, otp }, auth: false });

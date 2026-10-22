@@ -1,6 +1,7 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const pool = require('../config/db');
+const { generateOTP, sendOTPEmail } = require('../utils/otp'); // <-- Import OTP utility
 
 const SALT_ROUNDS = 10;
 const VALID_ROLES = ['farmer', 'buyer', 'supplier'];
@@ -39,6 +40,7 @@ async function register(req, res) {
 
     const user = result.rows[0];
 
+    // Registration still issues a token immediately (no 2FA on first signup)
     const token = jwt.sign(
       { user_id: user.user_id, role: user.role },
       process.env.JWT_SECRET,
@@ -52,7 +54,7 @@ async function register(req, res) {
   }
 }
 
-// POST /auth/login
+// POST /auth/login (Step 1: Password Validation -> Send OTP)
 async function login(req, res) {
   try {
     const { email, password } = req.body;
@@ -73,27 +75,93 @@ async function login(req, res) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
-    const token = jwt.sign(
-      { user_id: user.user_id, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: '24h' }
+    // --- 2FA LOGIC START ---
+    const otp = generateOTP();
+    const hashedOtp = await bcrypt.hash(otp, 10);
+    const expiry = new Date(Date.now() + 5 * 60 * 1000); // 5 mins
+
+    await pool.query(
+      'UPDATE users SET login_otp = $1, otp_expiry = $2 WHERE user_id = $3',
+      [hashedOtp, expiry, user.user_id]
     );
 
-    res.json({
-      user: {
-        user_id: user.user_id,
-        full_name: user.full_name,
-        email: user.email,
-        role: user.role,
-        phone_number: user.phone_number,
-        county: user.county,
-      },
-      token,
+    await sendOTPEmail(email, otp);
+
+    // Do NOT return the token yet. Tell the frontend to show the OTP input.
+    return res.json({ 
+      requires2FA: true, 
+      userId: user.user_id, 
+      message: "OTP sent to email" 
     });
+    // --- 2FA LOGIC END ---
+
   } catch (err) {
     console.error('Login error:', err);
     res.status(500).json({ error: 'Login failed' });
   }
 }
 
-module.exports = { register, login };
+// POST /auth/verify-otp (Step 2: OTP Validation -> Issue JWT)
+async function verifyLoginOTP(req, res) {
+  try {
+    const { userId, otp } = req.body;
+
+    if (!userId || !otp) {
+      return res.status(400).json({ error: 'userId and otp are required' });
+    }
+
+    const result = await pool.query('SELECT * FROM users WHERE user_id = $1', [userId]);
+    const user = result.rows[0];
+
+    if (!user || !user.login_otp) {
+      return res.status(400).json({ error: 'No pending OTP found' });
+    }
+
+    // Check expiry
+    if (new Date() > new Date(user.otp_expiry)) {
+      return res.status(400).json({ error: 'OTP has expired. Please log in again.' });
+    }
+
+    // Check OTP
+    const validOTP = await bcrypt.compare(otp, user.login_otp);
+    if (!validOTP) {
+      return res.status(400).json({ error: 'Invalid OTP' });
+    }
+
+    // Clear OTP from DB so it can't be reused
+    await pool.query(
+      'UPDATE users SET login_otp = NULL, otp_expiry = NULL WHERE user_id = $1',
+      [userId]
+    );
+
+    // Generate final JWT
+    const token = jwt.sign(
+      { user_id: user.user_id, role: user.role }, 
+      process.env.JWT_SECRET, 
+      { expiresIn: '24h' }
+    );
+
+    res.json({ 
+      token, 
+      user: { 
+        user_id: user.user_id, 
+        full_name: user.full_name, 
+        email: user.email, 
+        role: user.role, 
+        phone_number: user.phone_number,
+        county: user.county 
+      } 
+    });
+
+  } catch (err) {
+    console.error('OTP Verify error:', err);
+    res.status(500).json({ error: 'Server error verifying OTP' });
+  }
+}
+
+// Export all three functions
+module.exports = { 
+  register, 
+  login, 
+  verifyLoginOTP 
+};

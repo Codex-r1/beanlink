@@ -1,5 +1,6 @@
 const pool = require('../config/db');
-
+const fs = require('fs');
+const csv = require('csv-parser');
 exports.listUsers = async (req, res) => {
   const { role } = req.query;
   const params = [req.user.user_id];
@@ -191,5 +192,77 @@ exports.getStats = async (req, res) => {
   } catch (err) {
     console.error('getStats', err);
     res.status(500).json({ error: 'Failed to load stats' });
+  }
+};
+exports.importKamisCsv = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No CSV file uploaded' });
+    }
+
+    const results = [];
+
+    fs.createReadStream(req.file.path)
+      .pipe(csv())
+      .on('data', (data) => {
+        // 1. Normalize keys to lowercase to avoid hidden spaces
+        const cleanData = {};
+        Object.keys(data).forEach(key => {
+          cleanData[key.toLowerCase().trim()] = data[key];
+        });
+
+        const marketName = cleanData['market_name'] || cleanData['market'] || cleanData['market name'];
+        const county = cleanData['county'];
+        
+        // 2. Look for commodity, then clean it
+        let rawVariety = cleanData['commodity'] || cleanData['commodity_variety'] || cleanData['variety'] || cleanData['bean_variety'] || 'Beans';
+        
+        // Ensure it's a string before calling .replace()
+        if (typeof rawVariety !== 'string') rawVariety = 'Beans';
+
+        let variety = rawVariety.replace(/beans/gi, '').trim();
+        if (!variety) variety = 'Beans';
+
+        const price = parseFloat(cleanData['unit_price_kes'] || cleanData['retail'] || cleanData['price_per_kg'] || cleanData['wholesale'] || cleanData['price']);
+        const date = cleanData['recorded_date'] || cleanData['date'] || new Date().toISOString().split('T')[0];
+        const source = cleanData['source'] || 'KAMIS';
+
+        if (marketName && !isNaN(price)) {
+          results.push({ marketName, county, variety, price, date, source });
+        }
+      })
+      .on('end', async () => {
+        try {
+          for (const r of results) {
+            await pool.query(
+              `INSERT INTO price_records (market_name, county, bean_variety, price_per_kg, recorded_date, source)
+               VALUES ($1, $2, $3, $4, $5, $6)`,
+              [r.marketName, r.county || null, r.variety, r.price, r.date, r.source]
+            );
+          }
+
+          if (fs.existsSync(req.file.path)) {
+            fs.unlinkSync(req.file.path);
+          }
+
+          return res.status(200).json({
+            message: 'KAMIS CSV imported successfully',
+            count: results.length,
+          });
+        } catch (dbErr) {
+          console.error('Database insertion error:', dbErr);
+          if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+          return res.status(500).json({ error: 'Failed to insert price records into database' });
+        }
+      })
+      .on('error', (error) => {
+        console.error('CSV stream error:', error);
+        if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+        return res.status(500).json({ error: 'Failed to read CSV file' });
+      });
+
+  } catch (error) {
+    console.error('CSV import controller error:', error);
+    return res.status(500).json({ error: error.message || 'Server error during import' });
   }
 };

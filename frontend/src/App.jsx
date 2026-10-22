@@ -4,13 +4,13 @@ import {
   User, Search, Bell, Menu, X, ChevronRight, ChevronLeft,
   MapPin, Calendar, CheckCircle2, Clock, AlertCircle, Plus,
   ArrowLeft, LogOut, Users, ShieldCheck, Flag, Leaf, Wheat,
-  Beaker, Tractor, ShieldAlert, PauseCircle, Trash2, Pencil, Info
+  Beaker, Tractor, ShieldAlert, PauseCircle, Trash2, Pencil, Info, ChevronDown, ChevronUp
 } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 import {
-  registerUser, loginUser,
+  registerUser, loginUser,verifyLoginOTP,
   getDashboardSummary, getDashboardActivity,
   getMyListings, getMarketplace, getListing,
   createListing, updateListingStatus, deleteListing,
@@ -22,7 +22,7 @@ import {
   adminListPrices, adminCreatePrice,
   adminListReports,
   initiateMpesaPush, getPaymentStatus,getOrder, setFulfillment, sellerAdvance, buyerConfirm,
-  adminGetStats
+  adminGetStats, adminBatchImportPrices
 } from "./api";
 import { BEAN_VARIETIES, beanLabel, beanShort } from "./constants/varieties";
 import { INPUT_CATEGORIES, CATEGORY_FILTERS } from "./constants/inputCategories";
@@ -41,7 +41,7 @@ import EmptyState from "./components/EmptyState";
 import StatCard from "./components/StatCard";
 import Field from "./components/Field";
 import RecommendedInputCard from "./components/RecommendedInputCard";
-
+import NotificationBell from "./components/NotificationBell";
 /* ============================================================================
    PAYMENT MODAL — phone input → STK push → poll → confirm
    ========================================================================== */
@@ -346,6 +346,7 @@ function GuestHeader({ page, goto, goLogin, goRegister }) {
     { id: "guest-produce", label: "Marketplace" },
     { id: "guest-prices", label: "Market Prices" },
     { id: "about", label: "About" },
+    { id: "faq", label: "FAQ" },
   ];
   return (
     <header className="border-b sticky top-0 z-20" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
@@ -404,15 +405,15 @@ function Landing({ goto, goLogin, goRegister }) {
       <section className="max-w-6xl mx-auto px-5 pt-14 pb-16 grid md:grid-cols-2 gap-10 items-center">
         <div>
           <h1 className="text-4xl md:text-[2.6rem] leading-tight font-bold mb-5" style={{ letterSpacing: "-0.02em" }}>
-            Connecting Kenyan Bean Farmers to Better Markets and Better Decisions
+            Grow smarter. Sell with confidence.
           </h1>
           <p className="text-base mb-7" style={{ color: "var(--text-muted)" }}>
-            Access farm inputs, receive data-driven recommendations, sell your bean produce, and stay informed about
-            current agricultural market prices.
+            One platform for Kenyan bean farmers to explore farm inputs, receive data-driven recommendations, and check recorded market prices.
           </p>
           <div className="flex flex-wrap gap-3">
             <Button onClick={() => goto("guest-produce")}>Explore Marketplace</Button>
-            <Button variant="secondary" onClick={() => goto("guest-prices")}>View Market Prices</Button>
+            <Button variant="secondary" onClick={() => goRegister()}>Get Recommendations</Button>
+            <Button variant="ghost" onClick={() => goto("guest-prices")}>View Prices</Button>
           </div>
         </div>
         <HeroSlideshow />
@@ -420,7 +421,7 @@ function Landing({ goto, goLogin, goRegister }) {
       <section className="max-w-6xl mx-auto px-5 pb-14 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { icon: ShoppingBag, title: "Access Farm Inputs", desc: "Find agricultural inputs from verified sellers near you." },
-          { icon: Sprout, title: "Smart Input Recommendations", desc: "Get recommendations based on farm and soil conditions using a Random Forest model." },
+          { icon: Sprout, title: "Smart Input Recommendations", desc: "Get recommendations based on historical field trials using a Random Forest model." },
           { icon: Wheat, title: "Sell Your Bean Produce", desc: "List harvested beans and connect with potential buyers." },
           { icon: TrendingUp, title: "View Market Prices", desc: "Access current and historical bean market prices from recorded market data." },
         ].map((f, i) => (
@@ -433,29 +434,8 @@ function Landing({ goto, goLogin, goRegister }) {
           </div>
         ))}
       </section>
-      <section className="max-w-6xl mx-auto px-5 pb-16">
-        <div className="mb-5">
-          <div className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: "var(--primary)" }}>
-            By the numbers
-          </div>
-          <h2 className="text-xl font-bold" style={{ letterSpacing: "-0.01em" }}>Trusted across Kenya</h2>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[
-            { label: "Registered farmers", to: 1284 },
-            { label: "Active listings", to: 612 },
-            { label: "Transactions completed", to: 4130 },
-            { label: "Counties covered", to: 24 },
-          ].map((s) => (
-            <div key={s.label} className="agri-stat p-5">
-              <div className="text-3xl font-bold mb-1"><CountUp to={s.to} /></div>
-              <div className="text-xs uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>{s.label}</div>
-            </div>
-          ))}
-        </div>
-      </section>
       <footer className="border-t py-6 text-center text-xs" style={{ borderColor: "var(--border)", color: "var(--text-faint)" }}>
-        BeanLink — Agricultural Marketplace and Decision Support for Smallholder Bean Farmers
+        BeanLink: Agricultural Marketplace and Decision Support for Smallholder Bean Farmers
       </footer>
     </div>
   );
@@ -482,14 +462,15 @@ function AboutPage({ goto, goLogin, goRegister }) {
           harvested produce, and a data-driven input recommendation engine.
         </p>
         <p className="text-base mb-8" style={{ color: "var(--text-muted)" }}>
-          Recommendations are produced by a Random Forest model trained on soil, agro-
-          ecological, and crop-history features. Recorded market prices come from
-          trusted sources such as WFP and NCPB and are updated by platform administrators.
+          Our recommendation engine uses a Random Forest model trained on historical Kenyan bean field-trial data to rank candidate input packages by predicted yield gain. <strong>The recommendations are experimental decision-support estimates, not guaranteed yield improvements, and actual outcomes may differ across farms and growing conditions.</strong>
+        </p>
+        <p className="text-base mb-8" style={{ color: "var(--text-muted)" }}>
+          Market prices displayed on the platform are recorded observations with source and update information where available. They are intended to help farmers compare prices, not to guarantee the price they will receive when selling their produce.
         </p>
         <div className="grid sm:grid-cols-3 gap-4 mb-10">
           {[
             { icon: Wheat, title: "Market access", desc: "Sell produce directly to verified buyers across Kenya." },
-            { icon: Sprout, title: "Decision support", desc: "Input recommendations based on your farm's specific conditions." },
+            { icon: Sprout, title: "Decision support", desc: "Input recommendations based on historical trial data." },
             { icon: TrendingUp, title: "Price transparency", desc: "Recorded bean prices you can check before you sell." },
           ].map((c, i) => (
             <div key={i} className="agri-feature p-5">
@@ -514,7 +495,151 @@ function AboutPage({ goto, goLogin, goRegister }) {
     </div>
   );
 }
+function FAQPage({ goto, goLogin, goRegister, isAuthenticated = false ,guest = false }) {
+  const [openIndex, setOpenIndex] = useState(null);
 
+  const toggleAccordion = (index) => {
+    setOpenIndex(openIndex === index ? null : index);
+  };
+
+ const faqData = [
+    {
+      topic: "Land Preparation & Planting",
+      icon: Sprout,
+      questions: [
+        {
+          q: "When is the best time to plant beans in Kenya?",
+          a: "Beans are best planted at the onset of the rains. For the Long Rains (March-May), plant in mid-to-late March. For the Short Rains (October-December), plant in mid-October. Ensure the soil is well-drained and has adequate moisture before planting."
+        },
+        {
+          q: "What is the recommended spacing for beans?",
+          a: "For most bean varieties in Kenya, a spacing of 50 cm between rows and 10-15 cm between plants is recommended. This gives a plant population of roughly 200,000 to 250,000 plants per hectare. Plant 2 seeds per hole to ensure good germination, then thin to 1 plant."
+        },
+        {
+          q: "How deep should I plant my bean seeds?",
+          a: "Plant seeds at a depth of 2.5 to 5 cm. Deeper planting can lead to poor emergence, especially in heavy soils. Ensure good soil contact with the seed for optimal moisture absorption."
+        }
+      ]
+    },
+    {
+      topic: "Fertilizer & Soil Health",
+      icon: Beaker,
+      questions: [
+        {
+          q: "What fertilizer should I use for beans?",
+          a: "Beans generally respond well to phosphorus. Apply DAP (Diammonium Phosphate) or TSP (Triple Super Phosphate) at planting time, placing it in the planting hole and mixing it with soil before dropping the seed to avoid burning the seedling. A common recommendation is 50 kg of DAP per acre."
+        },
+        {
+          q: "Do I need to apply lime?",
+          a: "If your soil is highly acidic (pH below 5.5), liming is recommended. Beans prefer a pH of 5.8 to 6.5. Apply agricultural lime 2-3 months before planting, based on soil test results, to allow it time to react with the soil."
+        },
+        {
+          q: "Is seed inoculation necessary?",
+          a: "If beans have not been grown in the field recently, seed inoculation with the right Rhizobium strain can improve nitrogen fixation. However, if the field has a history of beans, the native bacteria are usually sufficient."
+        }
+      ]
+    },
+    {
+      topic: "Pest & Disease Management",
+      icon: ShieldAlert,
+      questions: [
+        {
+          q: "How do I control Bean Fly?",
+          a: "Bean fly is a major pest during the seedling stage. Use treated seeds (e.g., with imidacloprid or thiamethoxam) if available. Practice crop rotation and destroy crop residues. Foliar sprays may be needed if pest pressure is high, but early planting helps the crop escape severe damage."
+        },
+        {
+          q: "What are the common bean diseases and how do I manage them?",
+          a: "Common diseases include Bean Rust, Angular Leaf Spot, and Anthracnose. Use resistant varieties (like Kenya Umoja or Wairimu types). Practice crop rotation, use certified disease-free seeds, and maintain field hygiene by removing infected debris. Fungicides should only be used when symptoms are spotted early and in favorable weather conditions."
+        },
+        {
+          q: "How do I manage weeds?",
+          a: "Beans are poor competitors against weeds in the first 4-6 weeks. Keep the field weed-free during this critical period. One or two hand weedings are usually sufficient for smallholders. Avoid deep cultivation near the base of the plant to prevent root damage."
+        }
+      ]
+    },
+    {
+      topic: "Harvesting & Storage",
+      icon: Wheat,
+      questions: [
+        {
+          q: "How do I know my beans are ready for harvest?",
+          a: "Beans are ready for harvest when the pods turn yellow/brown and the seeds inside rattle. If harvesting for dry beans, uproot the plants and dry them in the field (or a shaded, dry area) for a few days before threshing. Avoid leaving them in the hot sun for too long to prevent seed splitting."
+        },
+        {
+          q: "What moisture content is safe for storage?",
+          a: "Dry beans should be stored at a moisture content of 12-14% to prevent mold and insect damage. Store in clean, dry bags (e.g., PICS bags) in a cool, dry place. Add a natural preservative like wood ash or neem leaves if commercial insecticides are not used."
+        },
+        {
+          q: "How do I prevent weevils in storage?",
+          a: "Ensure the beans are completely dry before storage. Use hermetic storage bags (like PICS bags) which deprive weevils of oxygen. Alternatively, use approved storage insecticides carefully following the manufacturer's instructions."
+        }
+      ]
+    }
+  ];
+
+  // 1. Create the main content block (the accordion list)
+  const content = (
+    <div className={isAuthenticated ? "max-w-4xl" : "max-w-4xl mx-auto px-5 py-10"}>
+      <SectionHeading
+        title="Farmer Knowledge Base"
+        subtitle="Agronomic guidance compiled from KALRO bean production guidelines to help you improve your yield."
+      />
+
+      <div className="space-y-6">
+        {faqData.map((section, sectionIdx) => (
+          <div key={sectionIdx} className="agri-card overflow-hidden">
+            <div className="bg-gray-50 border-b border-gray-200 p-4 flex items-center gap-3" style={{ background: "var(--surface-alt)", borderColor: "var(--border)" }}>
+              <section.icon className="text-emerald-600" size={20} style={{ color: "var(--primary)" }} />
+              <h2 className="text-lg font-semibold text-gray-800">{section.topic}</h2>
+            </div>
+            
+            <div className="divide-y divide-gray-100">
+              {section.questions.map((item, qIdx) => {
+                const globalIdx = `${sectionIdx}-${qIdx}`;
+                const isOpen = openIndex === globalIdx;
+
+                return (
+                  <div key={qIdx} className="bg-white">
+                    <button
+                      onClick={() => toggleAccordion(globalIdx)}
+                      className="w-full text-left px-5 py-4 flex justify-between items-center hover:bg-gray-50 transition-colors focus:outline-none"
+                      style={{ background: "var(--surface)" }}
+                    >
+                      <span className="font-medium text-gray-800 pr-4" style={{ color: "var(--text)" }}>{item.q}</span>
+                      {isOpen ? (
+                        <ChevronUp className="text-gray-400 shrink-0" size={18} style={{ color: "var(--text-faint)" }} />
+                      ) : (
+                        <ChevronDown className="text-gray-400 shrink-0" size={18} style={{ color: "var(--text-faint)" }} />
+                      )}
+                    </button>
+                    {isOpen && (
+                      <div className="px-5 pb-4 text-sm text-gray-600 leading-relaxed" style={{ background: "var(--surface)", color: "var(--text-muted)" }}>
+                        {item.a}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  // 2. If logged in, return ONLY the content. AppShell provides the layout.
+  if (isAuthenticated) {
+    return content;
+  }
+
+  // 3. If a guest, wrap the content in the Guest layout.
+  return (
+    <div className="agri-root min-h-screen">
+      <GuestHeader page="faq" goto={goto} goLogin={goLogin} goRegister={goRegister} />
+      {content}
+    </div>
+  );
+}
 /* ============================================================================
    LOGIN / REGISTER
    ========================================================================== */
@@ -527,29 +652,59 @@ function Login({ goto, onLogin, mode, setMode }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  
+  // New states for 2FA
+  const [otpMode, setOtpMode] = useState(false);
+  const [otp, setOtp] = useState("");
+  const [userId, setUserId] = useState(null);
 
   const handleSubmit = async () => {
     setError("");
     setLoading(true);
     try {
       let data;
+      
       if (mode === "login") {
-        data = await loginUser({ email, password });
+        if (otpMode) {
+          // Step 2: Verify the OTP
+          data = await verifyLoginOTP(userId, otp);
+        } else {
+          // Step 1: Validate email and password
+          data = await loginUser({ email, password });
+          
+          if (data.requires2FA) {
+            setUserId(data.userId);
+            setOtpMode(true);
+            setLoading(false);
+            return; // Stop here! Wait for the user to enter the code.
+          }
+        }
       } else {
+        // Registration flow
         const safeRole = ["farmer", "buyer", "supplier"].includes(role) ? role : "farmer";
         data = await registerUser({
           full_name: fullName, email, password,
           role: safeRole, phone_number: phone, county,
         });
       }
+
+      // If we get here, we either registered successfully or passed 2FA
       localStorage.setItem("beanlink_token", data.token);
       localStorage.setItem("beanlink_user", JSON.stringify(data.user));
       onLogin(data.user);
+      
     } catch (err) {
       setError(err.message || "Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleBackToLogin = () => {
+    setOtpMode(false);
+    setOtp("");
+    setUserId(null);
+    setError("");
   };
 
   return (
@@ -566,60 +721,98 @@ function Login({ goto, onLogin, mode, setMode }) {
             BeanLink
           </div>
           <p className="text-sm mb-5" style={{ color: "var(--text-muted)" }}>
-            {mode === "login" ? "Log in to your account." : "Create a new account."}
+            {otpMode 
+              ? "Enter the 6-digit code sent to your email." 
+              : mode === "login" ? "Log in to your account." : "Create a new account."}
           </p>
+          
           <div className="space-y-4">
-            {mode === "register" && (
+            {/* --- OTP INPUT VIEW --- */}
+            {otpMode ? (
               <>
-                <Field label="I am a...">
-                  <div className="grid grid-cols-3 gap-2">
-                    {["farmer", "buyer", "supplier"].map((r) => (
-                      <button key={r} onClick={() => setRole(r)} className="agri-btn agri-btn-sm"
-                        style={{
-                          background: role === r ? "var(--primary-soft)" : "var(--surface)",
-                          border: `1px solid ${role === r ? "var(--primary)" : "var(--border-strong)"}`,
-                          color: role === r ? "var(--primary-dark)" : "var(--text-muted)",
-                          textTransform: "capitalize", padding: "8px 4px",
-                          fontWeight: role === r ? 700 : 600,
-                        }}>
-                        {r}
-                      </button>
-                    ))}
+                <Field label="Verification Code">
+                  <input 
+                    className="agri-input text-center text-xl tracking-[0.5em] font-mono" 
+                    value={otp} 
+                    onChange={(e) => setOtp(e.target.value)} 
+                    placeholder="000000" 
+                    maxLength={6}
+                    autoFocus
+                  />
+                </Field>
+                {error && (
+                  <div className="text-sm p-2.5 rounded" style={{ background: "var(--red-soft)", color: "var(--red)", border: "1px solid var(--red-border)" }}>
+                    {error}
                   </div>
+                )}
+                <Button className="agri-btn-block" onClick={handleSubmit} disabled={loading || otp.length < 6}>
+                  {loading ? "Verifying..." : "Verify & Log In"}
+                </Button>
+                <p className="text-sm text-center mt-4">
+                  <button className="font-semibold text-gray-500 hover:text-gray-800" onClick={handleBackToLogin}>
+                    Back to login
+                  </button>
+                </p>
+              </>
+            ) : (
+              /* --- STANDARD LOGIN/REGISTER VIEW --- */
+              <>
+                {mode === "register" && (
+                  <>
+                    <Field label="I am a...">
+                      <div className="grid grid-cols-3 gap-2">
+                        {["farmer", "buyer", "supplier"].map((r) => (
+                          <button key={r} onClick={() => setRole(r)} className="agri-btn agri-btn-sm"
+                            style={{
+                              background: role === r ? "var(--primary-soft)" : "var(--surface)",
+                              border: `1px solid ${role === r ? "var(--primary)" : "var(--border-strong)"}`,
+                              color: role === r ? "var(--primary-dark)" : "var(--text-muted)",
+                              textTransform: "capitalize", padding: "8px 4px",
+                              fontWeight: role === r ? 700 : 600,
+                            }}>
+                            {r}
+                          </button>
+                        ))}
+                      </div>
+                    </Field>
+                    <Field label="Full name">
+                      <input className="agri-input" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="e.g. Josephine Mwangi" />
+                    </Field>
+                    <Field label="Phone number">
+                      <input className="agri-input" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="e.g. 0712 345 678" />
+                    </Field>
+                    <Field label="County">
+                      <input className="agri-input" value={county} onChange={(e) => setCounty(e.target.value)} placeholder="e.g. Machakos" />
+                    </Field>
+                  </>
+                )}
+                <Field label="Email">
+                  <input className="agri-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
                 </Field>
-                <Field label="Full name">
-                  <input className="agri-input" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="e.g. Josephine Mwangi" />
+                <Field label="Password">
+                  <input className="agri-input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
                 </Field>
-                <Field label="Phone number">
-                  <input className="agri-input" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="e.g. 0712 345 678" />
-                </Field>
-                <Field label="County">
-                  <input className="agri-input" value={county} onChange={(e) => setCounty(e.target.value)} placeholder="e.g. Machakos" />
-                </Field>
+                
+                {error && (
+                  <div className="text-sm p-2.5 rounded" style={{ background: "var(--red-soft)", color: "var(--red)", border: "1px solid var(--red-border)" }}>
+                    {error}
+                  </div>
+                )}
+                
+                <Button className="agri-btn-block" onClick={handleSubmit} disabled={loading}>
+                  {loading ? "Please wait..." : mode === "login" ? "Log In" : "Create Account"}
+                </Button>
+                
+                <p className="text-sm text-center mt-5" style={{ color: "var(--text-muted)" }}>
+                  {mode === "login" ? "New to BeanLink?" : "Already have an account?"}{" "}
+                  <button className="font-semibold" style={{ color: "var(--primary)" }}
+                    onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }}>
+                    {mode === "login" ? "Register" : "Log In"}
+                  </button>
+                </p>
               </>
             )}
-            <Field label="Email">
-              <input className="agri-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
-            </Field>
-            <Field label="Password">
-              <input className="agri-input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
-            </Field>
-            {error && (
-              <div className="text-sm p-2.5 rounded" style={{ background: "var(--red-soft)", color: "var(--red)", border: "1px solid var(--red-border)" }}>
-                {error}
-              </div>
-            )}
-            <Button className="agri-btn-block" onClick={handleSubmit} disabled={loading}>
-              {loading ? "Please wait..." : mode === "login" ? "Log In" : "Create Account"}
-            </Button>
           </div>
-          <p className="text-sm text-center mt-5" style={{ color: "var(--text-muted)" }}>
-            {mode === "login" ? "New to BeanLink?" : "Already have an account?"}{" "}
-            <button className="font-semibold" style={{ color: "var(--primary)" }}
-              onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }}>
-              {mode === "login" ? "Register" : "Log In"}
-            </button>
-          </p>
         </div>
       </div>
     </div>
@@ -642,7 +835,7 @@ function AppShell({ role, user, page, goto, onLogout, children }) {
     });
     if (ok) onLogout();
   };
-
+const loadOrders = async () => (await getOrders()).orders;
   return (
     <div className="agri-root min-h-screen flex">
       <aside className="hidden md:flex w-60 shrink-0 flex-col border-r" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
@@ -676,10 +869,9 @@ function AppShell({ role, user, page, goto, onLogout, children }) {
             <input className="agri-input" style={{ paddingLeft: 32 }} placeholder="Search produce, inputs, prices..." />
           </div>
           <div className="flex-1 sm:hidden font-bold">BeanLink</div>
-          <button className="relative" aria-label="Notifications">
-            <Bell size={19} style={{ color: "var(--text-muted)" }} />
-            <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full" style={{ background: "var(--amber)" }} />
-          </button>
+          
+               <NotificationBell user={user} loadOrders={loadOrders} goto={goto} />
+            
           <button className="flex items-center gap-2" onClick={() => goto("profile")}>
             <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold" style={{ background: "var(--primary-soft)", color: "var(--primary-dark)" }}>
               {user.full_name.split(" ").map((p) => p[0]).join("").slice(0, 2)}
@@ -1065,7 +1257,9 @@ function InputRecommendation({ goto, initialResult = null, onResult = null }) {
       open({
         tone: "error",
         title: "Recommendation failed",
-        body: err.message || "The recommendation service is unavailable. Please try again shortly.",
+        body:
+          err.message ||
+          "The recommendation service is unavailable. Please try again shortly.",
         confirmLabel: "Close",
       });
     } finally {
@@ -1370,7 +1564,7 @@ function InputRecommendation({ goto, initialResult = null, onResult = null }) {
   );
 }
 
-function Marketplace({ goto, guest = false, initialSearch = ""}) {
+function Marketplace({ goto, guest = false, initialSearch = "", goBack }) {
   const { push } = useToast();
   const { confirm } = useModal();
   
@@ -1520,15 +1714,15 @@ const visibleListings = React.useMemo(() => {
           title="Marketplace"
           subtitle="Browse bean produce, seeds, fertilizers, equipment and other farm inputs from verified farmers and suppliers."
         />
-        {goBack && (
-  <button
-    onClick={goBack}
-    className="flex items-center gap-1 text-sm mb-4"
-    style={{ color: "var(--primary)" }}
-  >
-    <ArrowLeft size={15} /> Back to your recommendation
-  </button>
-)}
+            {goBack && initialSearch && (
+          <button
+            onClick={goBack}
+            className="flex items-center gap-1 text-sm mb-4"
+            style={{ color: "var(--primary)" }}
+          >
+            <ArrowLeft size={15} /> Back to your recommendation
+          </button>
+        )}
         <button
           onClick={() => setIsCartOpen(true)}
           className="agri-btn agri-btn-secondary relative shrink-0"
@@ -2773,120 +2967,428 @@ function ListForm({ goto, role }) {
 }
 
 /* ============================================================================
-   MARKET PRICES
+   MARKET PRICES (KAMIS Format)
    ========================================================================== */
-function MarketPrices({ guest, goto }) {
-  const { push } = useToast();
-  const [variety, setVariety] = useState("Kenya Umoja");
-  const [county, setCounty] = useState("all");
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(true);
+const PAGE_SIZES = [10, 25, 50, 100];
+const MUTED = { color: "var(--text-muted)" };
+const FAINT = { color: "var(--text-faint)" };
 
+const rowTime = (r) => {
+  const t = new Date(r.recorded_date).getTime();
+  return Number.isNaN(t) ? 0 : t;
+};
+
+const isoDay = (v) => {
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return "";
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+};
+
+// Missing or invalid values show a dash instead of "KES NaN"
+const money = (v) =>
+  v === null || v === undefined || v === "" || Number.isNaN(Number(v)) ? "—" : fmtKES(v);
+const dateText = (v) => (isoDay(v) ? fmtDate(v) : "—");
+
+// Page numbers with gaps: 1 … 4 5 6 … 20
+function pageWindow(current, total) {
+  const keep = [...new Set([1, total, current - 1, current, current + 1])]
+    .filter((p) => p >= 1 && p <= total)
+    .sort((a, b) => a - b);
+  const out = [];
+  keep.forEach((p, i) => {
+    if (i > 0 && p - keep[i - 1] > 1) out.push("…");
+    out.push(p);
+  });
+  return out;
+}
+
+// Quote every cell, escape quotes, and stop spreadsheet formulas from running
+function csvCell(v) {
+  if (v === null || v === undefined) return "";
+  let s = String(v);
+  if (/^[=+\-@]/.test(s) && Number.isNaN(Number(s))) s = `'${s}`;
+  return `"${s.replace(/"/g, '""')}"`;
+}
+
+function exportCsv(rows) {
+  const header = [
+    "Variety", "Market", "County", "Retail price (KES/kg)",
+    "Wholesale price (KES/kg)", "Supply volume", "Date", "Source",
+  ];
+  const lines = rows.map((r) =>
+    [
+      r.bean_variety, r.market_name, r.county, r.price_per_kg,
+      r.wholesale_price, r.supply_volume, isoDay(r.recorded_date), r.source,
+    ].map(csvCell).join(",")
+  );
+  // The BOM makes Excel read the file as UTF-8
+  const csv = "\uFEFF" + [header.map(csvCell).join(","), ...lines].join("\r\n");
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `bean_prices_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function MarketPrices({ guest, goto }) {
+  const [rawRows, setRawRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
+
+  const [variety, setVariety] = useState("all");
+  const [county, setCounty] = useState("all");
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState("newest");
+  const [pageSize, setPageSize] = useState(10);
+  const [page, setPage] = useState(1);
+
+  // Load prices. A failed request shows an error with a retry button,
+  // not an empty table that looks like "no data".
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setError("");
     (async () => {
       try {
-        const params = { variety };
-        if (county !== "all") params.county = county;
-        const data = await getPrices(params);
-        if (cancelled) return;
-        setRows((data.prices || []).slice().sort((a, b) => new Date(a.recorded_date) - new Date(b.recorded_date)));
+        const data = await getPrices({});
+        if (!cancelled) setRawRows(data.prices || []);
       } catch (err) {
-        push(err.message || "Failed to load prices", "red");
+        if (!cancelled) setError(err.message || "Couldn't load prices.");
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
     return () => { cancelled = true; };
-  }, [variety, county, push]);
+  }, [reloadKey]);
 
-  const chartData = rows.map((r) => ({ date: String(r.recorded_date).slice(5), price: Number(r.price_per_kg) }));
-  const latest = rows[rows.length - 1];
-  const prev = rows[rows.length - 2];
+  // Filter options come from the data, so every option has records behind it
+  const varietyOptions = useMemo(
+    () => [...new Set(rawRows.map((r) => r.bean_variety).filter(Boolean))].sort(),
+    [rawRows]
+  );
+  const countyOptions = useMemo(
+    () => [...new Set(rawRows.map((r) => r.county).filter(Boolean))].sort(),
+    [rawRows]
+  );
+
+  const rows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const out = rawRows.filter(
+      (r) =>
+        (variety === "all" || r.bean_variety === variety) &&
+        (county === "all" || r.county === county) &&
+        (!q || [r.market_name, r.bean_variety, r.county].some((v) => v && String(v).toLowerCase().includes(q)))
+    );
+    const price = (r) => Number(r.price_per_kg) || 0;
+    out.sort(
+      sort === "price-low" ? (a, b) => price(a) - price(b)
+      : sort === "price-high" ? (a, b) => price(b) - price(a)
+      : (a, b) => rowTime(b) - rowTime(a)
+    );
+    return out;
+  }, [rawRows, variety, county, search, sort]);
+
+  // Optional columns only appear when at least one row has a value
+  const has = useMemo(() => {
+    const some = (key) => rows.some((r) => r[key] !== null && r[key] !== undefined && r[key] !== "");
+    return {
+      classification: some("classification"),
+      grade: some("grade"),
+      wholesale: some("wholesale_price"),
+      supply: some("supply_volume"),
+    };
+  }, [rows]);
+
+  const summary = useMemo(() => {
+    if (rows.length === 0) return null;
+    const latest = rows.reduce((m, r) => Math.max(m, rowTime(r)), 0);
+    const onLatest = rows.filter((r) => rowTime(r) === latest && Number(r.price_per_kg) > 0);
+    const avg = onLatest.length
+      ? onLatest.reduce((s, r) => s + Number(r.price_per_kg), 0) / onLatest.length
+      : null;
+    return {
+      latest,
+      avg,
+      n: onLatest.length,
+      markets: new Set(rows.map((r) => r.market_name).filter(Boolean)).size,
+      count: rows.length,
+    };
+  }, [rows]);
+
+  const sources = useMemo(
+    () => [...new Set(rows.map((r) => r.source).filter(Boolean))],
+    [rows]
+  );
+
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const current = Math.min(page, totalPages);
+  const start = (current - 1) * pageSize;
+  const pageRows = rows.slice(start, start + pageSize);
+
+  const filtersActive = variety !== "all" || county !== "all" || search.trim() !== "";
+  const clearFilters = () => { setVariety("all"); setCounty("all"); setSearch(""); setPage(1); };
+  const onFilter = (setter) => (e) => { setter(e.target.value); setPage(1); };
+
+  const stats = summary && [
+    { label: "Latest record", value: summary.latest > 0 ? dateText(summary.latest) : "—" },
+    {
+      label: "Average retail price",
+      value: summary.avg === null ? "—" : `${fmtKES(Math.round(summary.avg))}/kg`,
+      mono: true,
+      note: summary.avg === null ? "" : `${summary.n} ${summary.n === 1 ? "record" : "records"} on that date`,
+    },
+    { label: "Markets", value: summary.markets, mono: true },
+    { label: "Records", value: summary.count, mono: true },
+  ];
 
   return (
-    <div>
-      <SectionHeading title="Bean Market Prices" subtitle="View recorded bean prices across selected markets and time periods." />
+    <div className="space-y-5">
+      <SectionHeading
+        title="Bean Market Prices"
+        subtitle="Recorded bean prices from market observations."
+      />
+
       {guest && (
-        <div className="p-3 rounded mb-5 text-sm flex items-center gap-2" style={{ background: "var(--amber-soft)", color: "var(--amber)", border: "1px solid var(--amber-border)" }}>
-          <Info size={15} /> You're viewing public market data.{" "}
-          <button className="font-semibold underline" onClick={() => goto("register")}>Register</button> or{" "}
-          <button className="font-semibold underline" onClick={() => goto("login")}>Log in</button> to access your dashboard.
+        <div
+          className="p-3 rounded text-sm flex items-center gap-2"
+          style={{ background: "var(--amber-soft)", color: "var(--amber)", border: "1px solid var(--amber-border)" }}
+        >
+          <Info size={15} className="shrink-0" />
+          <span>
+            You're viewing public market data.{" "}
+            <button type="button" className="font-semibold underline" onClick={() => goto("register")}>Register</button> or{" "}
+            <button type="button" className="font-semibold underline" onClick={() => goto("login")}>Log in</button>{" "}
+            to access your dashboard.
+          </span>
         </div>
       )}
-      <div className="agri-card p-4 mb-5 grid sm:grid-cols-4 gap-3">
-        <Field label="Bean variety">
-          <select className="agri-select" value={variety} onChange={(e) => setVariety(e.target.value)}>
-            {BEAN_VARIETIES.map((v) => (
-              <option key={v.value} value={v.value}>{v.label} · {v.code}</option>
-            ))}
-          </select>
-        </Field>
-        <Field label="County">
-          <select className="agri-select" value={county} onChange={(e) => setCounty(e.target.value)}>
-            <option value="all">All counties</option>
-            {[...new Set(rows.map((r) => r.county).filter(Boolean))].map((c) => (
-              <option key={c}>{c}</option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Market"><input className="agri-input" placeholder="All markets" disabled /></Field>
-        <Field label="Date range"><input className="agri-input" placeholder="All records" disabled /></Field>
+
+      {/* Summary */}
+      {stats && !loading && !error && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {stats.map((s) => (
+            <div key={s.label} className="agri-stat p-4">
+              <div className="text-xs font-semibold uppercase tracking-wide mb-1" style={FAINT}>{s.label}</div>
+              <div className={`text-xl font-bold ${s.mono ? "mono" : ""}`}>{s.value}</div>
+              {s.note && <div className="text-xs mt-0.5" style={MUTED}>{s.note}</div>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Filters */}
+      <div className="agri-card p-4">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <Field label="Bean variety">
+            <select className="agri-select" value={variety} onChange={onFilter(setVariety)}>
+              <option value="all">All varieties</option>
+              {varietyOptions.map((v) => <option key={v} value={v}>{v}</option>)}
+            </select>
+          </Field>
+          <Field label="County">
+            <select className="agri-select" value={county} onChange={onFilter(setCounty)}>
+              <option value="all">All counties</option>
+              {countyOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </Field>
+          <Field label="Search">
+            <input
+              type="text"
+              className="agri-input"
+              placeholder="Market, variety or county"
+              value={search}
+              onChange={onFilter(setSearch)}
+            />
+          </Field>
+          <Field label="Sort by">
+            <select className="agri-select" value={sort} onChange={onFilter(setSort)}>
+              <option value="newest">Newest first</option>
+              <option value="price-low">Price: low to high</option>
+              <option value="price-high">Price: high to low</option>
+            </select>
+          </Field>
+        </div>
+        {filtersActive && (
+          <div className="mt-3">
+            <button type="button" className="text-sm font-semibold underline" style={{ color: "var(--primary)" }} onClick={clearFilters}>
+              Clear filters
+            </button>
+          </div>
+        )}
       </div>
+
+      {/* Results */}
       {loading ? (
-        <PageSkeleton rows={3} />
+        <PageSkeleton rows={5} />
+      ) : error ? (
+        <EmptyState
+          icon={AlertCircle}
+          title="Couldn't load prices"
+          body={error}
+          action={<Button variant="secondary" onClick={() => setReloadKey((k) => k + 1)}>Try again</Button>}
+        />
       ) : rows.length === 0 ? (
-        <EmptyState icon={TrendingUp} title="No recorded prices" body="There are no recorded prices for this variety yet." />
+        <EmptyState
+          icon={TrendingUp}
+          title="No price records found"
+          body={filtersActive ? "Nothing matches these filters. Try a different variety, county or search." : "No prices have been recorded yet. Check back soon."}
+          action={filtersActive ? <Button variant="secondary" onClick={clearFilters}>Clear filters</Button> : undefined}
+        />
       ) : (
-        <>
-          <div className="grid sm:grid-cols-4 gap-3 mb-6">
-            <StatCard label="Current Recorded Price" value={`${fmtKES(latest.price_per_kg)}/kg`} icon={TrendingUp} />
-            <StatCard label="Previous Recorded Price" value={prev ? `${fmtKES(prev.price_per_kg)}/kg` : "—"} icon={Clock} />
-            <StatCard label="Market" value={latest.market_name} icon={MapPin} mono={false} />
-            <StatCard label="Last Updated" value={fmtDate(latest.recorded_date)} icon={Calendar} mono={false} />
-          </div>
-          <div className="agri-card p-5 mb-6">
-            <div className="flex items-center justify-between mb-1">
-              <h3 className="font-semibold">Price History</h3>
-              <Badge tone="gray">Recorded Market Prices</Badge>
+        <div className="agri-card overflow-hidden">
+          <div
+            className="px-4 py-3 flex flex-wrap items-center justify-between gap-3 border-b"
+            style={{ borderColor: "var(--border)", background: "var(--surface-alt)" }}
+          >
+            <div>
+              <h3 className="font-semibold text-sm">Price records</h3>
+              <p className="text-xs" style={MUTED} aria-live="polite">
+                {rows.length} {rows.length === 1 ? "record" : "records"}{filtersActive ? " match your filters" : ""}
+              </p>
             </div>
-            <p className="text-xs mb-4" style={{ color: "var(--text-faint)" }}>
-              Historical prices recorded in the database — this is not a price prediction.
-            </p>
-            <div style={{ width: "100%", height: 220 }}>
-              <ResponsiveContainer>
-                <LineChart data={chartData} margin={{ left: -20, right: 10, top: 5 }}>
-                  <CartesianGrid stroke="var(--border)" vertical={false} />
-                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: "var(--text-faint)" }} axisLine={{ stroke: "var(--border)" }} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: "var(--text-faint)" }} axisLine={false} tickLine={false} width={45} />
-                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 4, border: "1px solid var(--border)" }} formatter={(v) => [`KES ${v}`, "Price/kg"]} />
-                  <Line type="monotone" dataKey="price" stroke="var(--primary)" strokeWidth={2} dot={{ r: 3 }} />
-                </LineChart>
-              </ResponsiveContainer>
+            <button type="button" className="agri-btn agri-btn-secondary agri-btn-sm" onClick={() => exportCsv(rows)}>
+              Download CSV
+            </button>
+          </div>
+
+          {/* Table: tablets and larger */}
+          <div className="hidden md:block agri-table-wrap">
+            <table className="agri-table">
+              <thead>
+                <tr>
+                  <th>Variety</th>
+                  <th>Market</th>
+                  <th>County</th>
+                  {has.classification && <th>Classification</th>}
+                  {has.grade && <th>Grade</th>}
+                  <th style={{ textAlign: "right" }}>Retail / kg</th>
+                  {has.wholesale && <th style={{ textAlign: "right" }}>Wholesale / kg</th>}
+                  {has.supply && <th style={{ textAlign: "right" }}>Supply</th>}
+                  <th>Date</th>
+                  <th>Source</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pageRows.map((r, i) => (
+                  <tr key={r.price_id ?? `${r.market_name}-${r.recorded_date}-${start + i}`}>
+                    <td className="font-medium">{beanLabel(r.bean_variety) || r.bean_variety || "—"}</td>
+                    <td>{r.market_name || "—"}</td>
+                    <td>{r.county || "—"}</td>
+                    {has.classification && <td>{r.classification || "—"}</td>}
+                    {has.grade && <td>{r.grade || "—"}</td>}
+                    <td className="mono font-semibold" style={{ textAlign: "right", color: "var(--primary)" }}>{money(r.price_per_kg)}</td>
+                    {has.wholesale && <td className="mono" style={{ textAlign: "right" }}>{money(r.wholesale_price)}</td>}
+                    {has.supply && <td className="mono" style={{ textAlign: "right" }}>{r.supply_volume || "—"}</td>}
+                    <td style={MUTED}>{dateText(r.recorded_date)}</td>
+                    <td>{r.source ? <span className="agri-badge agri-badge-gray">{r.source}</span> : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Cards: phones */}
+          <div className="md:hidden">
+            {pageRows.map((r, i) => (
+              <div
+                key={r.price_id ?? `${r.market_name}-${r.recorded_date}-${start + i}`}
+                className="p-4 border-b last:border-b-0"
+                style={{ borderColor: "var(--border)" }}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-semibold text-sm">{r.bean_variety || "—"}</div>
+                    <div className="text-xs flex items-center gap-1 mt-0.5" style={MUTED}>
+                      <MapPin size={11} className="shrink-0" />
+                      <span className="truncate">{[r.market_name, r.county].filter(Boolean).join(", ") || "—"}</span>
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="mono font-bold" style={{ color: "var(--primary)" }}>
+                      {money(r.price_per_kg)}<span className="text-xs font-normal" style={MUTED}> /kg</span>
+                    </div>
+                    {has.wholesale && r.wholesale_price ? (
+                      <div className="text-xs" style={MUTED}>Wholesale {money(r.wholesale_price)}</div>
+                    ) : null}
+                  </div>
+                </div>
+                <div className="flex items-center justify-between mt-2 text-xs" style={FAINT}>
+                  <span className="flex items-center gap-1"><Calendar size={11} />{dateText(r.recorded_date)}</span>
+                  {r.source && <span className="agri-badge agri-badge-gray">{r.source}</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Footer: sources, rows per page, pagination */}
+          <div
+            className="px-4 py-3 border-t flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+            style={{ borderColor: "var(--border)", background: "var(--surface-alt)" }}
+          >
+            <div className="text-xs space-y-1" style={MUTED}>
+              <div>Showing {start + 1} to {Math.min(start + pageSize, rows.length)} of {rows.length}</div>
+              {sources.length > 0 && <div>Source: {sources.join(", ")}</div>}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-2 text-xs" style={MUTED}>
+                Rows per page
+                <select
+                  className="agri-select"
+                  style={{ width: "auto", padding: "5px 8px" }}
+                  value={pageSize}
+                  onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
+                >
+                  {PAGE_SIZES.map((n) => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </label>
+
+              {totalPages > 1 && (
+                <nav aria-label="Pagination" className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    className="agri-btn agri-btn-secondary agri-btn-sm"
+                    aria-label="Previous page"
+                    disabled={current === 1}
+                    onClick={() => setPage(current - 1)}
+                  >
+                    <ChevronLeft size={14} />
+                  </button>
+                  {pageWindow(current, totalPages).map((p, i) =>
+                    p === "…" ? (
+                      <span key={`gap-${i}`} className="px-1 text-sm" style={FAINT}>…</span>
+                    ) : (
+                      <button
+                        key={p}
+                        type="button"
+                        className={`agri-btn agri-btn-sm ${p === current ? "agri-btn-primary" : "agri-btn-secondary"}`}
+                        aria-label={`Page ${p}`}
+                        aria-current={p === current ? "page" : undefined}
+                        onClick={() => setPage(p)}
+                      >
+                        {p}
+                      </button>
+                    )
+                  )}
+                  <button
+                    type="button"
+                    className="agri-btn agri-btn-secondary agri-btn-sm"
+                    aria-label="Next page"
+                    disabled={current === totalPages}
+                    onClick={() => setPage(current + 1)}
+                  >
+                    <ChevronRight size={14} />
+                  </button>
+                </nav>
+              )}
             </div>
           </div>
-          <div className="agri-card">
-            <div className="agri-table-wrap">
-              <table className="agri-table">
-                <thead>
-                  <tr><th>Market</th><th>Bean Variety</th><th>Price/kg</th><th>Date</th><th>Source</th></tr>
-                </thead>
-                <tbody>
-                  {[...rows].reverse().map((r, i) => (
-                    <tr key={i}>
-                      <td>{r.market_name}</td>
-                      <td>{beanShort(r.bean_variety)}</td>
-                      <td className="mono font-semibold">{fmtKES(r.price_per_kg)}</td>
-                      <td>{fmtDate(r.recorded_date)}</td>
-                      <td><Badge tone="gray">{r.source}</Badge></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </>
+        </div>
       )}
     </div>
   );
@@ -3461,17 +3963,36 @@ function AdminDashboard({ goto }) {
   );
 }
 
+/* ============================================================================
+   ADMIN MARKET PRICES DATA MANAGEMENT (Bulk KAMIS Upload + Manual Entry)
+   ========================================================================== */
 function AdminMarketPrices() {
   const { push } = useToast();
   const { open } = useModal();
+  
+  // State for Price Records Table
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  // Bulk Upload States
+  const [csvFile, setCsvFile] = useState(null);
+  const [bulkPreviewCount, setBulkPreviewCount] = useState(0);
+
+  // Manual Form State
   const [form, setForm] = useState({
-    market_name: "", county: "", bean_variety: "Kenya Umoja", price_per_kg: "", recorded_date: "", source: "",
+    market_name: "",
+    county: "",
+    bean_variety: "Kenya Umoja",
+    price_per_kg: "",
+    recorded_date: "",
+    source: "KAMIS",
   });
+
   const update = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
+  // Fetch all price records
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -3484,11 +4005,14 @@ function AdminMarketPrices() {
     }
   }, [push]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
+  // Handle Single Record Manual Save
   const addRecord = async () => {
     if (!form.market_name || !form.price_per_kg || !form.recorded_date) {
-      push("Please fill market, price, and date", "amber");
+      push("Please fill market, price, and date fields", "amber");
       return;
     }
     setSaving(true);
@@ -3499,15 +4023,22 @@ function AdminMarketPrices() {
         bean_variety: form.bean_variety,
         price_per_kg: Number(form.price_per_kg),
         recorded_date: form.recorded_date,
-        source: form.source || "Manual entry",
+        source: form.source || "KAMIS Manual",
       });
       open({
         tone: "success",
         title: "Price record saved",
-        body: "The new record is now live on the public Market Prices page.",
+        body: "The new market price is now live on the public KAMIS dashboard.",
         confirmLabel: "Done",
       });
-      setForm({ market_name: "", county: "", bean_variety: "Kenya Umoja", price_per_kg: "", recorded_date: "", source: "" });
+      setForm({
+        market_name: "",
+        county: "",
+        bean_variety: "Kenya Umoja",
+        price_per_kg: "",
+        recorded_date: "",
+        source: "KAMIS",
+      });
       load();
     } catch (err) {
       open({
@@ -3521,48 +4052,234 @@ function AdminMarketPrices() {
     }
   };
 
+  // Handle Bulk CSV Selection & Parsing
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setCsvFile(file);
+
+    // Simple line counter for preview
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const lines = evt.target.result.split("\n").filter((l) => l.trim().length > 0);
+      setBulkPreviewCount(Math.max(0, lines.length - 1)); // subtract header line
+    };
+    reader.readAsText(file);
+  };
+
+  // Handle Bulk Import Upload Action
+  const handleBulkImport = async () => {
+    if (!csvFile) {
+      push("Please select a KAMIS CSV or Excel export file first", "amber");
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", csvFile);
+
+      // Call batch import API endpoint
+      await adminBatchImportPrices(formData);
+
+      open({
+        tone: "success",
+        title: "KAMIS Bulk Import Successful",
+        body: `Processed and imported ${bulkPreviewCount} price records.`,
+        confirmLabel: "Great",
+      });
+
+      setCsvFile(null);
+      setBulkPreviewCount(0);
+      load();
+    } catch (err) {
+      open({
+        tone: "error",
+        title: "Bulk Import Failed",
+        body: err.message || "Ensure the CSV file columns match the KAMIS export format.",
+        confirmLabel: "Close",
+      });
+    } finally {
+      setUploading(false);
+    }
+  };
+
   return (
-    <div>
-      <SectionHeading title="Market Price Data Management" subtitle="Add and manage recorded bean market prices. This data feeds the public Market Price Dashboard." />
+    <div className="space-y-5">
+      <SectionHeading
+        title="Market Price Data Management"
+        subtitle="Upload bulk KAMIS CSV spreadsheets or manually add price records to feed the public Market Price Dashboard."
+      />
+
       <div className="grid lg:grid-cols-3 gap-5">
-        <div className="agri-card p-5 lg:col-span-1 h-fit">
-          <h3 className="font-semibold mb-4">Record a New Price</h3>
-          <div className="space-y-3">
-            <Field label="Market"><input className="agri-input" value={form.market_name} onChange={(e) => update("market_name", e.target.value)} placeholder="e.g. Nairobi" /></Field>
-            <Field label="County"><input className="agri-input" value={form.county} onChange={(e) => update("county", e.target.value)} placeholder="e.g. Nairobi" /></Field>
-            <Field label="Bean variety">
-              <select className="agri-select" value={form.bean_variety} onChange={(e) => update("bean_variety", e.target.value)}>
-                {BEAN_VARIETIES.map((v) => (
-                  <option key={v.value} value={v.value}>{v.label} · {v.code}</option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Price (KES)"><input className="agri-input" type="number" value={form.price_per_kg} onChange={(e) => update("price_per_kg", e.target.value)} /></Field>
-            <Field label="Date"><input className="agri-input" type="date" value={form.recorded_date} onChange={(e) => update("recorded_date", e.target.value)} /></Field>
-            <Field label="Data source"><input className="agri-input" placeholder="e.g. WFP, NCPB, field survey" value={form.source} onChange={(e) => update("source", e.target.value)} /></Field>
-            <Button className="agri-btn-block" onClick={addRecord} disabled={saving}>{saving ? "Saving…" : "Save Price Record"}</Button>
+        {/* Left Column: Management Tools */}
+        <div className="space-y-5 lg:col-span-1 h-fit">
+          
+          {/* BULK KAMIS CSV IMPORT CARD */}
+          <div className="agri-card p-5 border-emerald-200 bg-emerald-50/30">
+            <div className="flex items-center gap-2 mb-3">
+              <h3 className="font-semibold text-gray-900">Bulk CSV/Excel Upload</h3>
+            </div>
+            <p className="text-xs text-gray-600 mb-4">
+              Import price spreadsheets exported directly from the KAMIS portal (<code>kamis.kilimo.go.ke</code>).
+            </p>
+
+            <div className="space-y-3">
+              <Field label="Select KAMIS File">
+                <input
+                  type="file"
+                  accept=".csv"
+                  className="agri-input text-xs"
+                  onChange={handleFileSelect}
+                />
+              </Field>
+
+              {bulkPreviewCount > 0 && (
+                <div className="p-2.5 rounded bg-emerald-100 text-emerald-900 text-xs font-medium flex justify-between">
+                  <span>Detected Records:</span>
+                  <span className="font-bold">{bulkPreviewCount} rows</span>
+                </div>
+              )}
+
+              <Button
+                className="agri-btn-block bg-emerald-700 hover:bg-emerald-800 text-white"
+                onClick={handleBulkImport}
+                disabled={uploading || !csvFile}
+              >
+                {uploading ? "Importing Records..." : "Upload & Populate Dashboard"}
+              </Button>
+            </div>
           </div>
+
+          {/* SINGLE RECORD MANUAL ADD FORM */}
+          <div className="agri-card p-5">
+            <h3 className="font-semibold mb-3 text-gray-900">Manual Quick-Add</h3>
+            <p className="text-xs text-gray-500 mb-4">
+              Manually record a single price observation.
+            </p>
+
+            <div className="space-y-3">
+              <Field label="Market Name">
+                <input
+                  className="agri-input"
+                  value={form.market_name}
+                  onChange={(e) => update("market_name", e.target.value)}
+                  placeholder="e.g. Wakulima, Kerugoya"
+                />
+              </Field>
+
+              <Field label="County">
+                <input
+                  className="agri-input"
+                  value={form.county}
+                  onChange={(e) => update("county", e.target.value)}
+                  placeholder="e.g. Kirinyaga, Nairobi"
+                />
+              </Field>
+
+              <Field label="Bean Variety">
+                <select
+                  className="agri-select"
+                  value={form.bean_variety}
+                  onChange={(e) => update("bean_variety", e.target.value)}
+                >
+                  {BEAN_VARIETIES.map((v) => (
+                    <option key={v.value} value={v.value}>
+                      {v.label} · {v.code}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <Field label="Price (KES/kg)">
+                <input
+                  className="agri-input"
+                  type="number"
+                  placeholder="e.g. 140"
+                  value={form.price_per_kg}
+                  onChange={(e) => update("price_per_kg", e.target.value)}
+                />
+              </Field>
+
+              <Field label="Recorded Date">
+                <input
+                  className="agri-input"
+                  type="date"
+                  value={form.recorded_date}
+                  onChange={(e) => update("recorded_date", e.target.value)}
+                />
+              </Field>
+
+              <Field label="Data Source">
+                <input
+                  className="agri-input"
+                  placeholder="e.g. KAMIS, Field Survey"
+                  value={form.source}
+                  onChange={(e) => update("source", e.target.value)}
+                />
+              </Field>
+
+              <Button
+                className="agri-btn-block"
+                onClick={addRecord}
+                disabled={saving}
+              >
+                {saving ? "Saving…" : "Save Single Record"}
+              </Button>
+            </div>
+          </div>
+
         </div>
-        <div className="agri-card lg:col-span-2">
+
+        {/* Right Column: Existing Price Records Database Table */}
+        <div className="agri-card lg:col-span-2 overflow-hidden">
+          <div className="p-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
+            <h3 className="font-bold text-gray-800 text-sm">
+              Live Database Price Records
+            </h3>
+            <Badge tone="gray">{rows.length} Total Records</Badge>
+          </div>
+
           {loading ? (
-            <div className="p-5"><PageSkeleton rows={1} /></div>
+            <div className="p-5">
+              <PageSkeleton rows={3} />
+            </div>
           ) : rows.length === 0 ? (
-            <div className="p-5"><EmptyState icon={TrendingUp} title="No price records" body="Add the first price record using the form on the left." /></div>
+            <div className="p-5">
+              <EmptyState
+                icon={TrendingUp}
+                title="No price records in database"
+                body="Import a KAMIS CSV file or manually add a record using the forms on the left."
+              />
+            </div>
           ) : (
             <div className="agri-table-wrap">
               <table className="agri-table">
                 <thead>
-                  <tr><th>Market</th><th>County</th><th>Variety</th><th>Price/kg</th><th>Date</th><th>Source</th></tr>
+                  <tr>
+                    <th>Market</th>
+                    <th>County</th>
+                    <th>Variety</th>
+                    <th>Price/kg</th>
+                    <th>Date</th>
+                    <th>Source</th>
+                  </tr>
                 </thead>
                 <tbody>
-                  {rows.slice(0, 30).map((r) => (
+                  {rows.slice(0, 50).map((r) => (
                     <tr key={r.price_id}>
-                      <td>{r.market_name}</td>
+                      <td className="font-semibold text-gray-900">{r.market_name}</td>
                       <td>{r.county || "—"}</td>
                       <td>{beanShort(r.bean_variety)}</td>
-                      <td className="mono font-semibold">{fmtKES(r.price_per_kg)}</td>
-                      <td>{fmtDate(r.recorded_date)}</td>
-                      <td><Badge tone="gray">{r.source}</Badge></td>
+                      <td className="mono font-semibold text-emerald-800">
+                        {fmtKES(r.price_per_kg)}
+                      </td>
+                      <td className="text-gray-500">{fmtDate(r.recorded_date)}</td>
+                      <td>
+                        <Badge tone={r.source && r.source.includes("KAMIS") ? "green" : "gray"}>
+                          {r.source || "KAMIS"}
+                        </Badge>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -3640,7 +4357,7 @@ export default function App() {
   const [page, setPage] = useState("landing");
   const [authMode, setAuthMode] = useState("login");
   const [selectedItem, setSelectedItem] = useState(null);
-
+  const [returnTo, setReturnTo] = useState(null); 
   useEffect(() => {
     const token = localStorage.getItem("beanlink_token");
     const storedUser = localStorage.getItem("beanlink_user");
@@ -3709,9 +4426,15 @@ const goBack = () => {
     if (page === "landing") {
       guestContent = <Landing goto={goto} goLogin={goLogin} goRegister={goRegister} />;
     } else if (page === "login") {
-      guestContent = <Login goto={goto} onLogin={handleLogin} mode={authMode} setMode={setAuthMode} />;
+      guestContent = (
+        <GuestPage page="login" goto={goto} goLogin={goLogin} goRegister={goRegister}>
+          <Login goto={goto} onLogin={handleLogin} mode={authMode} setMode={setAuthMode} />
+        </GuestPage>
+      );
     } else if (page === "about") {
       guestContent = <AboutPage goto={goto} goLogin={goLogin} goRegister={goRegister} />;
+    }else if (page === "faq") {
+      guestContent = <FAQPage goto={goto} goLogin={goLogin} goRegister={goRegister} />;
     } else if (page === "marketplace" || page === "guest-produce") {
       guestContent = (
         <GuestPage page="guest-produce" goto={goto} goLogin={goLogin} goRegister={goRegister}>
@@ -3730,6 +4453,7 @@ const goBack = () => {
           <InputDetail item={selectedItem} goto={goto} guest />
         </GuestPage>
       );
+      
     } else if (page === "produce-detail") {
       guestContent = (
         <GuestPage page="guest-produce" goto={goto} goLogin={goLogin} goRegister={goRegister}>
@@ -3774,6 +4498,8 @@ case "marketplace":
       initialSearch={selectedItem?.search || ""}
     />
   );
+      case "faq":
+        return <FAQPage goto={goto} goLogin={goLogin} goRegister={goRegister} isAuthenticated={true} />;
       case "input-detail":
         return <InputDetail item={selectedItem} goto={goto} />;
       case "produce-detail":
