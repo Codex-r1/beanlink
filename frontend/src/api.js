@@ -158,3 +158,7 @@ export const adminBatchImportPrices = (formData) => {
 };
 export const verifyLoginOTP = (userId, otp) => 
   request("/auth/verify-otp", { method: "POST", body: { userId, otp }, auth: false });
+export const googleLogin = (credential) =>
+  request("/auth/google", { method: "POST", body: { credential }, auth: false });
+export const completeOnboarding = (role) => 
+  request("/auth/onboarding", { method: "POST", body: { role } });

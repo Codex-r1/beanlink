@@ -10,14 +10,14 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 import {
-  registerUser, loginUser,verifyLoginOTP,
+  registerUser, loginUser,verifyLoginOTP,googleLogin,
   getDashboardSummary, getDashboardActivity,
   getMyListings, getMarketplace, getListing,
   createListing, updateListingStatus, deleteListing,
   getOrders, createOrder, updateOrderStatus,
   getPrices, getLatestPrice,
   getProfile, updateProfile,
-  getRecommendation,
+  getRecommendation,completeOnboarding,
   adminListUsers, adminVerifyUser,
   adminListPrices, adminCreatePrice,
   adminListReports,
@@ -42,6 +42,8 @@ import StatCard from "./components/StatCard";
 import Field from "./components/Field";
 import RecommendedInputCard from "./components/RecommendedInputCard";
 import NotificationBell from "./components/NotificationBell";
+import { GoogleLogin } from '@react-oauth/google';
+
 /* ============================================================================
    PAYMENT MODAL — phone input → STK push → poll → confirm
    ========================================================================== */
@@ -515,6 +517,10 @@ function FAQPage({ goto, goLogin, goRegister, isAuthenticated = false ,guest = f
           q: "What is the recommended spacing for beans?",
           a: "For most bean varieties in Kenya, a spacing of 50 cm between rows and 10-15 cm between plants is recommended. This gives a plant population of roughly 200,000 to 250,000 plants per hectare. Plant 2 seeds per hole to ensure good germination, then thin to 1 plant."
         },
+            {
+      q: "When is the best time to plant beans in Kenya?",
+      a: "Beans are traditionally planted at the onset of the rains: Long Rains (March-May) and Short Rains (October-December). However, due to climate variability, farmers should verify actual soil moisture and local weather forecasts before planting, as rainfall patterns are increasingly unpredictable."
+    },
         {
           q: "How deep should I plant my bean seeds?",
           a: "Plant seeds at a depth of 2.5 to 5 cm. Deeper planting can lead to poor emergence, especially in heavy soils. Ensure good soil contact with the seed for optimal moisture absorption."
@@ -666,17 +672,14 @@ function Login({ goto, onLogin, mode, setMode }) {
       
       if (mode === "login") {
         if (otpMode) {
-          // Step 2: Verify the OTP
           data = await verifyLoginOTP(userId, otp);
         } else {
-          // Step 1: Validate email and password
           data = await loginUser({ email, password });
-          
           if (data.requires2FA) {
             setUserId(data.userId);
             setOtpMode(true);
             setLoading(false);
-            return; // Stop here! Wait for the user to enter the code.
+            return; 
           }
         }
       } else {
@@ -699,7 +702,23 @@ function Login({ goto, onLogin, mode, setMode }) {
       setLoading(false);
     }
   };
-
+    const handleGoogleSuccess = async (credentialResponse) => {
+    setError("");
+    setLoading(true);
+    try {
+      const data = await googleLogin(credentialResponse.credential);
+      
+      localStorage.setItem("beanlink_token", data.token);
+      localStorage.setItem("beanlink_user", JSON.stringify(data.user));
+      
+      // Use the same logic as handleLogin
+      onLogin(data.user); 
+    } catch (err) {
+      setError(err.message || "Google login failed.");
+    } finally {
+      setLoading(false);
+    }
+  };
   const handleBackToLogin = () => {
     setOtpMode(false);
     setOtp("");
@@ -759,22 +778,7 @@ function Login({ goto, onLogin, mode, setMode }) {
               <>
                 {mode === "register" && (
                   <>
-                    <Field label="I am a...">
-                      <div className="grid grid-cols-3 gap-2">
-                        {["farmer", "buyer", "supplier"].map((r) => (
-                          <button key={r} onClick={() => setRole(r)} className="agri-btn agri-btn-sm"
-                            style={{
-                              background: role === r ? "var(--primary-soft)" : "var(--surface)",
-                              border: `1px solid ${role === r ? "var(--primary)" : "var(--border-strong)"}`,
-                              color: role === r ? "var(--primary-dark)" : "var(--text-muted)",
-                              textTransform: "capitalize", padding: "8px 4px",
-                              fontWeight: role === r ? 700 : 600,
-                            }}>
-                            {r}
-                          </button>
-                        ))}
-                      </div>
-                    </Field>
+           
                     <Field label="Full name">
                       <input className="agri-input" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="e.g. Josephine Mwangi" />
                     </Field>
@@ -787,10 +791,10 @@ function Login({ goto, onLogin, mode, setMode }) {
                   </>
                 )}
                 <Field label="Email">
-                  <input className="agri-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+                  <input className="agri-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@gmail.com" />
                 </Field>
                 <Field label="Password">
-                  <input className="agri-input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
+                  <input className="agri-input" type="password" value={password} onChange={(e) => setPassword(e.target.value)}/>
                 </Field>
                 
                 {error && (
@@ -802,7 +806,21 @@ function Login({ goto, onLogin, mode, setMode }) {
                 <Button className="agri-btn-block" onClick={handleSubmit} disabled={loading}>
                   {loading ? "Please wait..." : mode === "login" ? "Log In" : "Create Account"}
                 </Button>
+                     <div className="flex items-center gap-2 my-2">
+                  <hr className="flex-1 border-gray-300" />
+                  <span className="text-xs text-gray-400 uppercase">Or</span>
+                  <hr className="flex-1 border-gray-300" />
+                </div>
                 
+                <div className="flex justify-center">
+                  <GoogleLogin
+                    onSuccess={handleGoogleSuccess}
+                    onError={() => setError("Google Sign-In was cancelled or failed")}
+                    theme="outline"
+                    size="large"
+                    width="300"
+                  />
+                </div>
                 <p className="text-sm text-center mt-5" style={{ color: "var(--text-muted)" }}>
                   {mode === "login" ? "New to BeanLink?" : "Already have an account?"}{" "}
                   <button className="font-semibold" style={{ color: "var(--primary)" }}
@@ -1208,16 +1226,20 @@ function SupplierDashboard({ goto, user }) {
 function InputRecommendation({ goto, initialResult = null, onResult = null }) {
   const { open } = useModal();
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState(initialResult); // restores the App-level result on return
+  const [result, setResult] = useState(initialResult);
   const [marketplaceListings, setMarketplaceListings] = useState([]);
   const [history, setHistory] = useState([]);
+  
+  // Default form state
   const [form, setForm] = useState({
     beanVariety: "Kenya Umoja",
     season: "Long Rains",
     county: "Machakos",
   });
+  
   const update = (k, v) => setForm((f) => ({ ...f, [k]: v }));
- 
+  const isUnsupported = form.beanVariety === "Other";
+
   // Load the farmer's saved recommendations once.
   useEffect(() => {
     let cancelled = false;
@@ -1231,18 +1253,18 @@ function InputRecommendation({ goto, initialResult = null, onResult = null }) {
     })();
     return () => { cancelled = true; };
   }, []);
- 
+
   // Reload the history after a new recommendation is saved.
   const refreshHistory = async () => {
     try {
       const data = await getRecommendationHistory();
       setHistory(data.recommendations || []);
-    } catch {
-      // keep the list we already have
-    }
+    } catch {}
   };
- 
+
   const submit = async () => {
+    if (isUnsupported) return; 
+    
     setLoading(true);
     try {
       const data = await getRecommendation({
@@ -1252,26 +1274,24 @@ function InputRecommendation({ goto, initialResult = null, onResult = null }) {
       });
       setResult(data);
       if (onResult) onResult(data);
-      refreshHistory(); // not awaited, so the result shows straight away
+      refreshHistory(); 
     } catch (err) {
       open({
         tone: "error",
         title: "Recommendation failed",
-        body:
-          err.message ||
-          "The recommendation service is unavailable. Please try again shortly.",
+        body: err.message || "The recommendation service is unavailable.",
         confirmLabel: "Close",
       });
     } finally {
       setLoading(false);
     }
   };
- 
+
   // Rebuild the result view from a saved record.
   const openFromHistory = (h) => {
     setResult({
       recommendation: {
-        seed: h.recommended_seed || h.variety, // variety is an input now, so recommended_seed may be empty
+        seed: h.recommended_seed || h.variety,
         fertilizer: h.recommended_fertilizer,
         soilAmendment: h.recommended_lime,
         inoculation: h.recommended_inoculation,
@@ -1280,11 +1300,10 @@ function InputRecommendation({ goto, initialResult = null, onResult = null }) {
       summary: h.summary || "",
       disclaimer: "This is a saved recommendation from your history. Absolute yields vary by site.",
     });
-    if (onResult) onResult(null); // clear the App-level copy of the latest result
+    if (onResult) onResult(null);
   };
- 
-  // When a recommendation is on screen, fetch marketplace listings once so the
-  // input cards can check availability locally.
+
+  // Fetch marketplace listings to check availability
   useEffect(() => {
     if (!result) return;
     let cancelled = false;
@@ -1298,69 +1317,101 @@ function InputRecommendation({ goto, initialResult = null, onResult = null }) {
     })();
     return () => { cancelled = true; };
   }, [result]);
- 
+
+  // --- REUSABLE HISTORY COMPONENT ---
+  const historyUI = history.length > 0 && (
+    <div className="mt-12 pt-8 border-t" style={{ borderColor: "var(--border)" }}>
+      <h3 className="font-bold text-lg mb-4" style={{ color: "var(--text)" }}>Recent comparisons</h3>
+      <div className="grid sm:grid-cols-2 gap-3">
+        {history.slice(0, 4).map((h) => (
+          <button
+            key={h.rec_id}
+            type="button"
+            onClick={() => openFromHistory(h)}
+            className="text-left p-4 rounded-lg border flex items-center justify-between gap-3 transition-colors hover:border-[var(--primary)]"
+            style={{ borderColor: "var(--border)", background: "var(--surface)" }}
+          >
+            <div className="min-w-0">
+              <div className="font-bold text-sm" style={{ color: "var(--primary-dark)" }}>
+                {beanLabel(h.variety)} 
+              </div>
+              <div className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+                {h.season} · {h.recommended_fertilizer || "No fertilizer"}
+              </div>
+              <div className="text-[10px] uppercase tracking-wide mt-2 font-semibold" style={{ color: "var(--text-faint)" }}>
+                {fmtDate(h.created_at)}
+              </div>
+            </div>
+            <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ background: "var(--primary-soft)" }}>
+              <ChevronRight size={16} style={{ color: "var(--primary)" }} />
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  // --- RENDER STATES ---
+
+  // 1. LOADING STATE
   if (loading) {
     return (
-      <div className="max-w-2xl">
+      <div className="max-w-2xl mx-auto py-4">
         <SectionHeading
-          eyebrow="Smart Advice"
-          title="Working out your advice…"
-          subtitle="Checking your answers against the trial results."
+          eyebrow="Machine Learning Advisor"
+          title="Running trial comparison..."
+          subtitle="Analyzing historical field trials to find your best input package."
         />
-        <div className="space-y-3">
-          <div className="agri-skel h-6 w-56" />
-          <div className="grid sm:grid-cols-3 gap-3">
-            <div className="agri-skel h-32" />
-            <div className="agri-skel h-32" />
-            <div className="agri-skel h-32" />
+        <div className="agri-card p-8 space-y-6 mt-8 shadow-sm">
+          <div className="agri-skel h-8 w-1/3" />
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div className="agri-skel h-20" />
+            <div className="agri-skel h-20" />
+            <div className="agri-skel h-20" />
+            <div className="agri-skel h-20" />
           </div>
-          <div className="agri-skel h-40" />
-          <div className="agri-skel h-10 w-48" />
+          <div className="agri-skel h-12 w-full mt-4" />
         </div>
       </div>
     );
   }
- 
+
+    // 2. RESULT STATE
   if (result) {
     const rec = result.recommendation || {};
     const explanation = Array.isArray(result.explanation) ? result.explanation : [];
     const alternatives = Array.isArray(result.alternatives) ? result.alternatives : [];
  
-    // Bars show relative importance: the biggest factor is 100%, the rest scale from it.
-    // Absolute values, because SHAP-style weights can be negative.
     const weights = explanation.map((e) => Math.abs(Number(e.weight) || 0));
     const maxWeight = Math.max(1e-6, ...weights);
  
-    // Specific search terms only. Generic words like "seed" or "fertilizer" would
-    // make any listing count as a match, so they are left out.
     const seedTerms = [beanShort(rec.seed), rec.seed].filter(Boolean);
     const fertilizerTerms = [rec.fertilizer].filter(Boolean);
     const limeTerms = rec.soilAmendment === "With lime" ? ["lime", "agricultural lime"] : [];
     const inocTerms = rec.inoculation === "Inoculated" ? ["biofix", "inoculant", "rhizobium"] : [];
-    const limeAndInocTerms = [...limeTerms, ...inocTerms]; // empty when advice is "Without lime" and "Not inoculated"
+    const limeAndInocTerms = [...limeTerms, ...inocTerms]; 
  
     return (
-      <div className="max-w-2xl">
+      <div className="max-w-2xl mx-auto py-4">
         <SectionHeading
           eyebrow="Smart Advice"
-          title="What to use on your farm"
-          subtitle="Based on 25 bean farm tests done in Kenya between 2010 and 2012."
+          title="Your Best Match"
+          subtitle="Based on 25 real bean farm trials in Kenya between 2010 and 2012."
         />
  
-        {/* Recommendation cards: each resolves to Buy or Agrovet */}
-        <div className="grid sm:grid-cols-3 gap-3 mb-6">
+        <div className="grid sm:grid-cols-3 gap-3 mb-6 mt-6">
           <RecommendedInputCard
             icon={Sprout}
-            label="Your variety"
+            label="Your bean variety"
             value={beanLabel(rec.seed) || "—"}
-            note="Confirm this is what you are planting."
+            note="Make sure this is the seed you have."
             searchTerms={seedTerms}
             marketplaceListings={marketplaceListings}
             goto={goto}
           />
           <RecommendedInputCard
             icon={Beaker}
-            label="Use this fertilizer"
+            label="Fertilizer to use"
             value={rec.fertilizerDisplay || rec.fertilizer || "—"}
             searchTerms={fertilizerTerms}
             marketplaceListings={marketplaceListings}
@@ -1368,7 +1419,7 @@ function InputRecommendation({ goto, initialResult = null, onResult = null }) {
           />
           <RecommendedInputCard
             icon={Leaf}
-            label="Lime & seed treatment"
+            label="Soil treatment & seed prep"
             value={`${rec.soilAmendmentDisplay || rec.soilAmendment || "—"} · ${
               rec.inoculationDisplay || rec.inoculation || "—"
             }`}
@@ -1378,39 +1429,30 @@ function InputRecommendation({ goto, initialResult = null, onResult = null }) {
           />
         </div>
  
-        {/* Why we suggest this: relative weighting, not kg/ha */}
         {explanation.length > 0 && (
-          <div className="agri-card p-5 mb-5">
-            <div className="flex items-center gap-2 mb-2">
-              <Info size={15} style={{ color: "var(--primary)" }} />
-              <span className="text-sm font-semibold">Why we suggest this</span>
+          <div className="agri-card p-6 mb-5">
+            <div className="flex items-center gap-2 mb-4">
+              <Info size={18} style={{ color: "var(--primary)" }} />
+              <span className="text-base font-bold" style={{ color: "var(--primary-dark)" }}>Why this is a good choice</span>
             </div>
-            {result.summary && (
-              <p className="text-sm mb-4" style={{ color: "var(--text-muted)" }}>
-                {result.summary}
-              </p>
-            )}
+            
+            <p className="text-sm mb-4 font-medium" style={{ color: "var(--text)" }}>
+              {/* Simplify the summary returned from the backend */}
+              Our research shows this combination gave the best results in past trials.
+            </p>
  
-            <div
-              className="p-3 rounded mb-4 text-xs"
-              style={{ background: "var(--surface-alt)", color: "var(--text-muted)" }}
-            >
-              Longer bars mean the factor mattered more in the recommendation.
-              This shows relative weighting only, not a prediction of your harvest.
-            </div>
- 
-            <div className="space-y-3">
+            <div className="space-y-4 mt-6">
               {explanation.map((e, i) => {
                 const pct = Math.round((weights[i] / maxWeight) * 100);
                 return (
                   <div key={i}>
-                    <div className="flex justify-between text-xs mb-1">
-                      <span className="font-medium">{e.factor}</span>
-                      <span className="mono" style={{ color: "var(--text-muted)" }}>
+                    <div className="flex justify-between text-sm mb-1.5">
+                      <span className="font-semibold" style={{ color: "var(--text)" }}>{e.factor}</span>
+                      <span className="mono font-bold" style={{ color: "var(--primary)" }}>
                         {pct}%
                       </span>
                     </div>
-                    <div className="agri-bar-track">
+                    <div className="agri-bar-track h-2">
                       <div className="agri-bar-fill" style={{ width: `${pct}%` }} />
                     </div>
                   </div>
@@ -1420,17 +1462,16 @@ function InputRecommendation({ goto, initialResult = null, onResult = null }) {
           </div>
         )}
  
-        {/* Alternatives */}
         {alternatives.length > 0 && (
-          <div className="agri-card p-5 mb-5">
-            <h3 className="font-semibold mb-3">Other mixes we tested</h3>
+          <div className="agri-card p-6 mb-5">
+            <h3 className="font-bold text-base mb-4" style={{ color: "var(--text)" }}>Other options to consider</h3>
             <div className="agri-table-wrap">
               <table className="agri-table">
                 <thead>
                   <tr>
                     <th>Fertilizer</th>
                     <th>Lime</th>
-                    <th>Seed treatment</th>
+                    <th>Seed preparation</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1449,121 +1490,194 @@ function InputRecommendation({ goto, initialResult = null, onResult = null }) {
  
         {result.disclaimer && (
           <div
-            className="p-3 rounded mb-5 text-xs"
-            style={{ background: "var(--surface-alt)", color: "var(--text-muted)" }}
+            className="p-4 rounded-lg mb-6 text-sm flex items-start gap-2"
+            style={{ background: "var(--amber-soft)", color: "var(--amber)", border: "1px solid var(--amber-border)" }}
           >
-            {result.disclaimer}
+            <AlertCircle size={16} className="shrink-0 mt-0.5" />
+            <span>
+              <strong>Remember:</strong> Your actual harvest depends on your soil, rainfall, and how well you manage the crop. This is a guide based on past research, not a guarantee.
+            </span>
           </div>
         )}
  
-        <div className="flex gap-3">
-          <Button
-            variant="secondary"
-            onClick={() => {
-              setResult(null);
-              if (onResult) onResult(null);
-            }}
-          >
-            Try another farm
-          </Button>
-          {/* the route name must match a case in renderPage */}
-          <Button variant="secondary" icon={ShoppingBag} onClick={() => goto("marketplace")}>
-            Browse all inputs
-          </Button>
-        </div>
+        {/* ... Buttons and History UI ... */}
       </div>
     );
   }
- 
+  // 3. FORM STATE
   return (
-    <div className="max-w-xl">
-      <SectionHeading
-        eyebrow="Smart Advice"
-        title="Get advice for your farm"
-        subtitle="Tell us three things and we'll suggest the best inputs to use."
-      />
- 
-      <div className="agri-card p-5 space-y-4">
-        <Field label="Bean variety" hint="The code after each name is the trial line code.">
-          <select
-            className="agri-select"
-            value={form.beanVariety}
-            onChange={(e) => update("beanVariety", e.target.value)}
-          >
-            {BEAN_VARIETIES.map((v) => (
-              <option key={v.value} value={v.value}>
-                {v.label}  ·  {v.code}
-              </option>
-            ))}
-          </select>
-        </Field>
- 
-        <Field label="Season" hint="Which rains are you planting for?">
-          <select
-            className="agri-select"
-            value={form.season}
-            onChange={(e) => update("season", e.target.value)}
-          >
-            <option>Long Rains</option>
-            <option>Short Rains</option>
-          </select>
-        </Field>
- 
-        <Field label="County" hint="We save this with your record. It doesn't change the advice.">
-          <input
-            className="agri-input"
-            value={form.county}
-            onChange={(e) => update("county", e.target.value)}
-            placeholder="e.g. Machakos"
-          />
-        </Field>
- 
-        <Button className="agri-btn-block" onClick={submit} disabled={loading}>
-          {loading ? "Working it out…" : "Get Recommendation"}
-        </Button>
+    <div className="max-w-2xl mx-auto py-4">
+      <div className="mb-8">
+        <SectionHeading
+          eyebrow="Input Advisory"
+        />
       </div>
- 
-      <p className="text-xs mt-3" style={{ color: "var(--text-faint)" }}>
-        Recommendations come from a Random Forest model trained on 25 Kenyan bean trials
-        (2010–2012). The model ranks input packages against each other; absolute yield
-        varies by site.
-      </p>
- 
-      {/* Saved recommendations */}
-      {history.length > 0 && (
-        <div className="agri-card p-5 mt-5">
-          <h3 className="font-semibold mb-3">Your recent recommendations</h3>
-          <div className="space-y-3">
-            {history.slice(0, 5).map((h) => (
-              <button
-                key={h.rec_id}
-                type="button"
-                onClick={() => openFromHistory(h)}
-                className="w-full text-left p-3 rounded border flex items-center justify-between gap-3"
-                style={{ borderColor: "var(--border)", background: "#FBFBF8", cursor: "pointer" }}
-              >
-                <div className="min-w-0">
-                  <div className="font-semibold text-sm">
-                    {beanLabel(h.variety)} · {h.season}
+      <div className="agri-card p-6 md:p-8 space-y-8 shadow-sm">
+
+        {/* Step 1: Variety */}
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold bg-gray-100 text-gray-600">1</div>
+            <label className="text-sm font-bold" style={{ color: "var(--text)" }}>
+              Which beans are you planting?
+            </label>
+          </div>
+          
+          <div className="grid sm:grid-cols-2 gap-3">
+            {BEAN_VARIETIES.map((v) => {
+              const active = form.beanVariety === v.value;
+              return (
+                <button
+                  key={v.value}
+                  type="button"
+                  onClick={() => update("beanVariety", v.value)}
+                  className="w-full text-left p-3 rounded border transition-all flex items-center gap-3"
+                  style={{
+                    borderColor: active ? "var(--primary)" : "var(--border)",
+                    background: active ? "var(--primary-soft)" : "var(--surface)",
+                    boxShadow: active ? "0 0 0 1px var(--primary)" : "none"
+                  }}
+                >
+                  <div className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${active ? 'border-[var(--primary)]' : 'border-gray-400'}`}>
+                    {active && <div className="w-2 h-2 rounded-full bg-[var(--primary)]" />}
                   </div>
-                  <div className="text-xs" style={{ color: "var(--text-muted)" }}>
-                    {h.recommended_fertilizer || "—"}
-                    {h.recommended_lime ? ` · ${h.recommended_lime}` : ""}
+                  <div>
+                    <div className="font-semibold text-sm" style={{ color: active ? "var(--primary-dark)" : "var(--text)" }}>
+                      {v.label}
+                    </div>
+                    <div className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                      Code: {v.code}
+                    </div>
                   </div>
-                  <div className="text-xs mt-0.5" style={{ color: "var(--text-faint)" }}>
-                    {fmtDate(h.created_at)}
-                  </div>
+                </button>
+              );
+            })}
+
+            {/* Unsupported Variety Card */}
+            <button
+              type="button"
+              onClick={() => update("beanVariety", "Other")}
+              className="w-full text-left p-3 rounded border transition-all flex items-center gap-3"
+              style={{
+                borderColor: isUnsupported ? "var(--amber)" : "var(--border)",
+                background: isUnsupported ? "var(--amber-soft)" : "var(--surface)",
+                boxShadow: isUnsupported ? "0 0 0 1px var(--amber)" : "none"
+              }}
+            >
+              <div className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${isUnsupported ? 'border-[var(--amber)]' : 'border-gray-400'}`}>
+                {isUnsupported && <div className="w-2 h-2 rounded-full bg-[var(--amber)]" />}
+              </div>
+              <div>
+                <div className="font-semibold text-sm" style={{ color: isUnsupported ? "var(--amber)" : "var(--text)" }}>
+                  Other variety
                 </div>
-                <ChevronRight size={16} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
-              </button>
-            ))}
+                <div className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                  My variety isn't listed
+                </div>
+              </div>
+            </button>
           </div>
         </div>
-      )}
+
+        {/* Conditional Rendering based on Variety Support */}
+                {isUnsupported ? (
+          
+          /* UNSUPPORTED STATE */
+          <div className="p-5 rounded-lg border animate-in fade-in slide-in-from-top-2 duration-300" style={{ background: "var(--amber-soft)", borderColor: "var(--amber-border)" }}>
+            <div className="flex items-start gap-3">
+              <AlertCircle size={22} className="shrink-0 mt-0.5" style={{ color: "var(--amber)" }} />
+              <div>
+                <h4 className="font-bold text-base mb-1" style={{ color: "var(--amber)" }}>
+                  We don't have research on this variety yet
+                </h4>
+                <p className="text-sm mb-4" style={{ color: "var(--amber)" }}>
+                  Our advice is currently based on past research for Rosecoco, Wairimu, and Mwitemania beans. Because we don't have trial data for this variety, we cannot give you a reliable recommendation for it.
+                </p>
+                <div className="flex flex-wrap gap-3">
+                  <Button 
+                    size="sm" 
+                    onClick={() => goto("marketplace")}
+                  >
+                    Browse available seeds
+                  </Button>
+                  <Button 
+                    variant="secondary" 
+                    size="sm" 
+                    onClick={() => goto("faq")}
+                  >
+                    Read Farming Tips
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        ) : (
+
+          /* SUPPORTED STATE */
+          <div className="space-y-6 animate-in fade-in duration-300">
+            <hr style={{ borderColor: "var(--border)" }} />
+            
+            {/* Step 2: Season */}
+                       {/* Step 2: Season */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold bg-gray-100 text-gray-600">2</div>
+                <label className="text-sm font-bold" style={{ color: "var(--text)" }}>
+                  When did you plant? (or plan to plant)
+                </label>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {["Long Rains", "Short Rains"].map((s) => {
+                  const active = form.season === s;
+                  return (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => update("season", s)}
+                      className="w-full text-center py-3 rounded border font-semibold text-sm transition-all"
+                      style={{
+                        borderColor: active ? "var(--primary)" : "var(--border)",
+                        background: active ? "var(--primary-soft)" : "var(--surface)",
+                        color: active ? "var(--primary-dark)" : "var(--text-muted)",
+                      }}
+                    >
+                      {s}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Step 3: County */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold bg-gray-100 text-gray-600">3</div>
+                <label className="text-sm font-bold" style={{ color: "var(--text)" }}>
+                  County <span className="font-normal text-gray-400">(Optional)</span>
+                </label>
+              </div>
+              <input
+                className="agri-input"
+                value={form.county}
+                onChange={(e) => update("county", e.target.value)}
+                placeholder="e.g. Machakos"
+              />
+            </div>
+
+            <Button className="agri-btn-block h-12 text-base shadow-sm mt-4" onClick={submit} disabled={loading}>
+              {loading ? "Running trial comparison..." : "Get Recommendations"}
+            </Button>
+          </div>
+
+        )}
+      </div>
+ 
+      {/* HISTORY UI ADDED HERE */}
+      {historyUI}
     </div>
   );
 }
-
 function Marketplace({ goto, guest = false, initialSearch = "", goBack }) {
   const { push } = useToast();
   const { confirm } = useModal();
@@ -2843,7 +2957,7 @@ function ListForm({ goto, role }) {
   };
 
   return (
-    <div className="max-w-lg">
+     <div className="w-full max-w-lg mx-auto">
       <SectionHeading
         title={isFarmer ? "List Bean Produce" : "Add Farm Input"}
         subtitle={
@@ -3720,7 +3834,7 @@ function Profile({ user, onUserUpdate }) {
     setSaving(true);
     try {
       const data = await updateProfile(form);
-      push("Profile changes saved", "green");
+      push("Profile updated successfully", "green");
       setProfile(data.user);
       if (onUserUpdate) onUserUpdate(data.user);
     } catch (err) {
@@ -3735,12 +3849,34 @@ function Profile({ user, onUserUpdate }) {
     }
   };
 
-  if (loading) return <PageSkeleton rows={1} />;
+  if (loading) return <PageSkeleton rows={2} />;
   if (!profile) return null;
 
+  // Check if the profile is missing crucial info
+  const isIncomplete = !profile.phone_number || !profile.county;
+
   return (
-    <div className="max-w-lg">
+     <div className="w-full max-w-lg mx-auto">
       <SectionHeading title="Profile" subtitle="Manage your account information." />
+      
+      {/* Incomplete Profile Prompt */}
+      {isIncomplete && (
+        <div 
+          className="p-4 rounded-lg mb-5 flex items-start gap-3 animate-in fade-in slide-in-from-top-2"
+          style={{ background: "var(--amber-soft)", border: "1px solid var(--amber-border)" }}
+        >
+          <AlertCircle size={20} className="shrink-0 mt-0.5" style={{ color: "var(--amber)" }} />
+          <div>
+            <h4 className="font-semibold text-sm mb-1" style={{ color: "var(--amber)" }}>
+              Complete your profile
+            </h4>
+            <p className="text-xs" style={{ color: "var(--amber)" }}>
+              Please add your phone number and county. This helps us provide better localized market data and ensures buyers/sellers can contact you.
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="agri-card p-6">
         <div className="flex items-center gap-4 mb-6">
           <div className="w-14 h-14 rounded-full flex items-center justify-center text-lg font-bold" style={{ background: "var(--primary-soft)", color: "var(--primary-dark)" }}>
@@ -3749,21 +3885,37 @@ function Profile({ user, onUserUpdate }) {
           <div>
             <div className="font-bold">{profile.full_name}</div>
             <div className="text-sm capitalize" style={{ color: "var(--text-muted)" }}>
-              {profile.role} · {profile.county || "—"}
+              {profile.role} · {profile.county || "Location missing"}
             </div>
           </div>
         </div>
+        
         <div className="space-y-4">
           <Field label="Full name">
             <input className="agri-input" value={form.full_name} onChange={(e) => setForm((f) => ({ ...f, full_name: e.target.value }))} />
           </Field>
-          <Field label="Phone number">
-            <input className="agri-input" value={form.phone_number} onChange={(e) => setForm((f) => ({ ...f, phone_number: e.target.value }))} />
+          
+          <Field label="Phone number" hint={!profile.phone_number ? "Required for order fulfillment" : ""}>
+            <input 
+              className="agri-input" 
+              value={form.phone_number} 
+              onChange={(e) => setForm((f) => ({ ...f, phone_number: e.target.value }))} 
+              placeholder="e.g. 0712 345 678"
+            />
           </Field>
+          
           <Field label="County">
-            <input className="agri-input" value={form.county} onChange={(e) => setForm((f) => ({ ...f, county: e.target.value }))} />
+            <input 
+              className="agri-input" 
+              value={form.county} 
+              onChange={(e) => setForm((f) => ({ ...f, county: e.target.value }))} 
+              placeholder="e.g. Machakos"
+            />
           </Field>
-          <Button onClick={save} disabled={saving}>{saving ? "Saving…" : "Save Changes"}</Button>
+          
+          <Button onClick={save} disabled={saving} className="mt-2">
+            {saving ? "Saving…" : "Save Changes"}
+          </Button>
         </div>
       </div>
     </div>
@@ -4349,6 +4501,62 @@ function GuestPage({ children, page, goto, goLogin, goRegister }) {
     </div>
   );
 }
+function Onboarding({ user, onComplete }) {
+  const [loading, setLoading] = useState(false);
+
+  const handleSelect = async (selectedRole) => {
+    setLoading(true);
+    try {
+      const data = await completeOnboarding(selectedRole); 
+      onComplete(data);
+    } catch (err) {
+      alert("Failed to save your selection. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="agri-root min-h-screen flex items-center justify-center px-5 bg-gray-50 py-10">
+      <div className="w-full max-w-md">
+        <div className="text-center mb-8">
+          <div className="w-12 h-12 flex items-center justify-center rounded mx-auto mb-4" style={{ background: "var(--primary)" }}>
+            <Sprout size={24} color="#fff" />
+          </div>
+          <h1 className="text-2xl font-bold mb-2">Welcome, {user.full_name.split(" ")[0]}!</h1>
+          <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+            Let's personalize your experience. What do you want to achieve on BeanLink?
+          </p>
+        </div>
+
+        <div className="space-y-3">
+          {[
+            { role: "farmer", icon: Sprout, title: "I want to grow and sell beans", desc: "Get AI recommendations, list harvests, and track market prices." },
+            { role: "buyer", icon: ShoppingBag, title: "I want to purchase produce and farm inputs", desc: "Browse high-quality produce and connect directly with farmers and suppliers." },
+            { role: "supplier", icon: Package, title: "I want to supply farm inputs", desc: "List and sell seeds, fertilizers, and equipment to farmers." }
+          ].map((opt) => (
+            <button
+              key={opt.role}
+              disabled={loading}
+              onClick={() => handleSelect(opt.role)}
+              className="w-full text-left p-4 rounded border transition-all hover:border-green-600 hover:shadow-md disabled:opacity-50 agri-card"
+            >
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: "var(--primary-soft)" }}>
+                  <opt.icon size={20} style={{ color: "var(--primary)" }} />
+                </div>
+                <div>
+                  <div className="font-bold text-sm" style={{ color: "var(--text)" }}>{opt.title}</div>
+                  <div className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>{opt.desc}</div>
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 /* ============================================================================
    ROOT APP
    ========================================================================== */
@@ -4403,9 +4611,29 @@ const goBack = () => {
 
   const handleLogin = (user) => {
     setSession(user);
-    setPage("dashboard");
+    if (user.onboarding_completed === false) {
+      setPage("onboarding");
+    } else {
+      setPage("dashboard");
+    }
   };
+ const handleOnboardingComplete = ({ user: updatedUser, token }) => {
+  if (!updatedUser || updatedUser.onboarding_completed !== true) {
+    throw new Error("Onboarding was not completed successfully.");
+  }
 
+  const newSession = { ...session, ...updatedUser };
+
+  if (token) {
+    localStorage.setItem("beanlink_token", token);
+  }
+
+  localStorage.setItem("beanlink_user", JSON.stringify(newSession));
+  setSession(newSession);
+  setSelectedItem(null);
+  setReturnTo(null);
+  setPage("dashboard");
+};
   const handleUserUpdate = (user) => {
     const merged = { ...session, ...user };
     localStorage.setItem("beanlink_user", JSON.stringify(merged));
@@ -4418,7 +4646,19 @@ const goBack = () => {
     setSession(null);
     setPage("landing");
   };
-
+if (session && session.onboarding_completed !== true) {
+  return (
+    <ToastHost>
+      <ModalHost>
+        <GlobalStyle />
+        <Onboarding
+          user={session}
+          onComplete={handleOnboardingComplete}
+        />
+      </ModalHost>
+    </ToastHost>
+  );
+}
   // --- UNAUTHENTICATED / GUEST FLOW ---
   if (!session) {
     let guestContent = null;
@@ -4460,6 +4700,9 @@ const goBack = () => {
           <ProduceDetail item={selectedItem} goto={goto} guest />
         </GuestPage>
       );
+      if (page === "onboarding") {
+    return <Onboarding user={session} onComplete={handleOnboardingComplete} />;
+  }
         } else {
       guestContent = <Landing goto={goto} goLogin={goLogin} goRegister={goRegister} />;
     }
@@ -4498,6 +4741,8 @@ case "marketplace":
       initialSearch={selectedItem?.search || ""}
     />
   );
+        case "onboarding":
+        return <Onboarding user={session} onComplete={handleOnboardingComplete} />;
       case "faq":
         return <FAQPage goto={goto} goLogin={goLogin} goRegister={goRegister} isAuthenticated={true} />;
       case "input-detail":

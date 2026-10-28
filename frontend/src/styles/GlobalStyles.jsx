@@ -3,36 +3,51 @@ import React from "react";
 export default function GlobalStyle() {
   return (
     <style>{`
-      .agri-root {
-        --bg: #F8F8F5;
-        --surface: #FFFFFF;
-        --surface-alt: #F2F1EA;
-        --border: #E1DED4;
-        --border-strong: #C9C5B7;
-        --text: #1A1D1A;
-        --text-muted: #5A5D57;
-        --text-faint: #8A8D85;
-        --primary: #1E3A2B;
-        --primary-dark: #142619;
-        --primary-hover: #2A4A38;
-        --primary-soft: #E8EEE8;
-        --primary-soft-border: #C5D2C4;
-        --amber: #8A5A0B;
-        --amber-soft: #F5EEDC;
-        --amber-border: #E0CC97;
-        --blue: #2F4A6B;
-        --blue-soft: #E7EDF4;
-        --blue-border: #BFCDDD;
-        --red: #963A3A;
-        --red-soft: #F6E9E8;
-        --red-border: #E0BFBD;
-        font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
-        background: var(--bg);
-        color: var(--text);
-        -webkit-font-smoothing: antialiased;
-      }
-      .agri-root .mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; }
+  body {
+  font-family: 'Montserrat', sans-serif;
+}
 
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+.agri-root {
+  --bg: #F8F8F5;
+  --surface: #FFFFFF;
+  --surface-alt: #F2F1EA;
+  --border: #E1DED4;
+  --border-strong: #C9C5B7;
+  --text: #1A1D1A;
+  --text-muted: #5A5D57;
+  --text-faint: #8A8D85;
+  --primary: #1E3A2B;
+  --primary-dark: #142619;
+  --primary-hover: #2A4A38;
+  --primary-soft: #E8EEE8;
+  --primary-soft-border: #C5D2C4;
+  --amber: #8A5A0B;
+  --amber-soft: #F5EEDC;
+  --amber-border: #E0CC97;
+  --blue: #2F4A6B;
+  --blue-soft: #E7EDF4;
+  --blue-border: #BFCDDD;
+  --red: #963A3A;
+  --red-soft: #F6E9E8;
+  --red-border: #E0BFBD;
+
+  font-family: 'Montserrat', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+.agri-root .mono {
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+}
       .agri-btn {
         display: inline-flex; align-items: center; justify-content: center; gap: 8px;
         padding: 10px 18px; border-radius: 4px; font-size: 14px; font-weight: 600;

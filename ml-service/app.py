@@ -228,12 +228,10 @@ def recommend():
     fert_text = friendly_fertilizer(top['fertilizer_treatment'])
     lime_text = friendly_lime(top['lime_treatment']).lower()
     inoc_text = friendly_inoculation(top['inoculation']).lower()
-
     summary = (
-        f"For {display['market']} beans in the {season.lower()}, the best mix we found is "
-        f"{fert_text} fertilizer, {lime_text}, and {inoc_text}."
+        f"For {display['market']} beans planted during the {season.lower()}, "
+        f"past trials showed the best results when using {fert_text} fertilizer, {lime_text}, and {inoc_text}."
     )
-
     return jsonify({
         'recommendation': {
             'seed': variety,
@@ -247,7 +245,7 @@ def recommend():
             'inoculation': top['inoculation'],
             'inoculationDisplay': friendly_inoculation(top['inoculation']),
         },
-        'confidence': 'Medium',
+       
         'explanation': explanation,
         'summary': summary,
         'alternatives': [
