@@ -162,3 +162,12 @@ export const googleLogin = (credential) =>
   request("/auth/google", { method: "POST", body: { credential }, auth: false });
 export const completeOnboarding = (role) => 
   request("/auth/onboarding", { method: "POST", body: { role } });
+export const getRecommendationHistory = () => request("/recommendations/history");
+export const getOrderReview = (txnId) => 
+  request(`/orders/${txnId}/review`);
+
+export const createReview = (txnId, payload) => 
+  request(`/orders/${txnId}/review`, { method: "POST", body: payload });
+
+export const getSellerRating = (sellerId) => 
+  request(`/sellers/${sellerId}/rating`, { auth: false });

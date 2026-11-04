@@ -53,3 +53,18 @@ exports.getRecommendation = async (req, res) => {
     res.status(502).json({ error: 'Recommendation service unreachable' });
   }
 };
+exports.getRecommendationHistory = async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM recommendations 
+       WHERE farmer_id = $1 
+       ORDER BY created_at DESC 
+       LIMIT 5`,
+      [req.user.user_id] // The JWT still holds the user_id
+    );
+    res.json({ recommendations: rows });
+  } catch (err) {
+    console.error('getRecommendationHistory error:', err);
+    res.status(500).json({ error: 'Failed to load history' });
+  }
+};

@@ -47,7 +47,15 @@ exports.listPrices = async (req, res) => {
     const { rows } = await pool.query(
       `SELECT * FROM price_records ORDER BY recorded_date DESC LIMIT 100`
     );
-    res.json({ prices: rows });
+    
+    // Find the most recent date in the database
+    let lastUpdated = null;
+    if (rows.length > 0) {
+      // Assuming recorded_date is a standard date string
+      lastUpdated = rows[0].recorded_date; 
+    }
+
+    res.json({ prices: rows, lastUpdated });
   } catch (err) {
     console.error('listPrices', err);
     res.status(500).json({ error: 'Failed to load prices' });

@@ -181,7 +181,154 @@ def health():
 # ---------------------------------------------------------------------------
 # The recommendation endpoint
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# The recommendation endpoint
+# ---------------------------------------------------------------------------
 @app.route('/predict', methods=['POST'])
+@app.route('/recommend', methods=['POST'])
+def recommend():
+    data = request.get_json(silent=True)
+    if data is None:
+        return jsonify({
+            'error': 'Request must be JSON with Content-Type: application/json'
+        }), 400
+
+    variety = data.get('variety')
+    season = data.get('season')
+    
+    # --- NEW CONTEXT FIELDS ---
+    altitude = data.get('altitude')
+    challenge = data.get('challenge')
+
+    if not variety or not season:
+        return jsonify({
+            'error': 'Please select a bean variety and a season.'
+        }), 400
+
+    if variety not in META['variety_options']:
+        return jsonify({
+            'error': f'We do not have data for "{variety}". Available: {META["variety_options"]}'
+        }), 400
+
+    if season not in META['season_options']:
+        return jsonify({
+            'error': f'Unknown season "{season}". Available: {META["season_options"]}'
+        }), 400
+
+    # Score every candidate package
+    candidates = build_candidates(variety, season)
+    candidates['predicted_gain'] = pipeline.predict(candidates[FEATURE_COLS])
+    candidates = candidates.sort_values(
+        'predicted_gain', ascending=False
+    ).reset_index(drop=True)
+
+    top = candidates.iloc[0]
+    runner_ups = candidates.iloc[1:4]
+
+    # SHAP on the top recommendation
+    top_row = candidates.iloc[[0]][FEATURE_COLS]
+    explanation = explain_row(top_row, top_n=4)
+
+    # Friendly display values
+    display = variety_display(variety)
+    fert_text = friendly_fertilizer(top['fertilizer_treatment'])
+    lime_text = friendly_lime(top['lime_treatment']).lower()
+    inoc_text = friendly_inoculation(top['inoculation']).lower()
+
+    # --- 1. DEFENSIBLE MODEL SUMMARY ---
+    summary = (
+        f"Using the selected variety ({display['market']}) and historical season ({season}), "
+        f"the model ranked this package highest: {fert_text}, {lime_text}, and {inoc_text}."
+    )
+
+    # --- 2. CONDITIONAL CONTEXT MESSAGES ---
+    contextMessages = []
+    
+    if altitude:
+        try:
+            alt_val = int(altitude)
+            # Assuming a reasonable range check
+            if 0 < alt_val < 4000:
+                contextMessages.append({
+                    "topic": "altitude",
+                    "message": f"You entered an altitude of {alt_val}m. This was recorded for context but was not used to calculate the model prediction.",
+                    "affectsPrediction": False
+                })
+            else:
+                contextMessages.append({
+                    "topic": "altitude_error",
+                    "message": "The altitude entered appears to be outside normal farming ranges. It was not used.",
+                    "affectsPrediction": False
+                })
+        except (ValueError, TypeError):
+             contextMessages.append({
+                "topic": "altitude_error",
+                "message": "Could not read the altitude value. It was not used.",
+                "affectsPrediction": False
+            })
+
+    if challenge == "rain":
+        contextMessages.append({
+            "topic": "rainfall",
+            "message": "You indicated insufficient rainfall is a concern. This model does not assess current weather. Ensure the soil is moist before applying this fertilizer.",
+            "affectsPrediction": False
+        })
+    elif challenge == "pests":
+        contextMessages.append({
+            "topic": "pests",
+            "message": "You indicated pests are a concern. Ensure you use certified seeds and practice crop rotation alongside this fertilizer.",
+            "affectsPrediction": False
+        })
+    elif challenge == "weeds":
+        contextMessages.append({
+            "topic": "weeds",
+            "message": "You indicated weeds are a concern. Keep the field clear for the first 4-6 weeks to give the beans a strong start.",
+            "affectsPrediction": False
+        })
+    elif challenge == "budget":
+        contextMessages.append({
+            "topic": "budget",
+            "message": "You indicated budget is a concern. We recommend checking the current market price of these inputs before purchasing. Do not substitute lime or inoculant for fertilizer, as they serve different purposes.",
+            "affectsPrediction": False
+        })
+
+    return jsonify({
+        'recommendation': {
+            'seed': variety,
+            'seedLabel': display['label'],
+            'seedMarket': display['market'],
+            'seedCode': display['code'],
+            'fertilizer': top['fertilizer_treatment'],
+            'fertilizerDisplay': friendly_fertilizer(top['fertilizer_treatment']),
+            'soilAmendment': top['lime_treatment'],
+            'soilAmendmentDisplay': friendly_lime(top['lime_treatment']),
+            'inoculation': top['inoculation'],
+            'inoculationDisplay': friendly_inoculation(top['inoculation']),
+        },
+        'explanation': explanation,
+        'summary': summary,
+        'contextMessages': contextMessages, # <-- NEW
+        'alternatives': [
+            {
+                'fertilizer': r['fertilizer_treatment'],
+                'fertilizerDisplay': friendly_fertilizer(r['fertilizer_treatment']),
+                'lime': r['lime_treatment'],
+                'limeDisplay': friendly_lime(r['lime_treatment']),
+                'inoculation': r['inoculation'],
+                'inoculationDisplay': friendly_inoculation(r['inoculation']),
+                'predictedGain': round(float(r['predicted_gain']), 0),
+            }
+            for _, r in runner_ups.iterrows()
+        ],
+        'disclaimer': (
+            "Your actual harvest will depend on your soil, "
+            "the weather, and how you manage the crop."
+        ),
+    })
+
+if __name__ == '__main__':
+    port = int(os.getenv('PORT', 5001))
+    app.run(port=port, debug=True)
 @app.route('/recommend', methods=['POST'])
 def recommend():
     data = request.get_json(silent=True)
@@ -232,39 +379,7 @@ def recommend():
         f"For {display['market']} beans planted during the {season.lower()}, "
         f"past trials showed the best results when using {fert_text} fertilizer, {lime_text}, and {inoc_text}."
     )
-    return jsonify({
-        'recommendation': {
-            'seed': variety,
-            'seedLabel': display['label'],
-            'seedMarket': display['market'],
-            'seedCode': display['code'],
-            'fertilizer': top['fertilizer_treatment'],
-            'fertilizerDisplay': friendly_fertilizer(top['fertilizer_treatment']),
-            'soilAmendment': top['lime_treatment'],
-            'soilAmendmentDisplay': friendly_lime(top['lime_treatment']),
-            'inoculation': top['inoculation'],
-            'inoculationDisplay': friendly_inoculation(top['inoculation']),
-        },
-       
-        'explanation': explanation,
-        'summary': summary,
-        'alternatives': [
-            {
-                'fertilizer': r['fertilizer_treatment'],
-                'fertilizerDisplay': friendly_fertilizer(r['fertilizer_treatment']),
-                'lime': r['lime_treatment'],
-                'limeDisplay': friendly_lime(r['lime_treatment']),
-                'inoculation': r['inoculation'],
-                'inoculationDisplay': friendly_inoculation(r['inoculation']),
-                'predictedGain': round(float(r['predicted_gain']), 0),
-            }
-            for _, r in runner_ups.iterrows()
-        ],
-        'disclaimer': (
-            "Your actual harvest will depend on your soil, "
-            "the weather, and how you manage the crop."
-        ),
-    })
+   
 
 
 if __name__ == '__main__':

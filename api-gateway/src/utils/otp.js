@@ -1,11 +1,11 @@
 const nodemailer = require('nodemailer');
+require('dotenv').config(); // Ensure env vars are loaded
 
 const transporter = nodemailer.createTransport({
-  host: 'smtp.ethereal.email',
-  port: 587,
+  service: 'gmail', // Use Gmail's built-in settings
   auth: {
-    user: 'stevie45@ethereal.email', 
-    pass: 'ssESRf7ZM5AxCjfHHe' 
+    user: process.env.SMTP_USER, // Your Gmail address
+    pass: process.env.SMTP_PASS, // The 16-letter App Password
   }
 });
 
@@ -15,13 +15,13 @@ exports.generateOTP = () => {
 
 exports.sendOTPEmail = async (email, otp) => {
   const mailOptions = {
-    from: '"BeanLink Security" <security@beanlink.com>',
-    to: email,
+    from: `"BeanLink Security" <${process.env.SMTP_USER}>`, 
+    to: email, // The dynamic recipient (farmer, buyer, etc.)
     subject: 'Your BeanLink Login Code',
     text: `Your one-time login code is: ${otp}`,
     html: `<h1>${otp}</h1>`
   };
   
-  const info = await transporter.sendMail(mailOptions);
-  console.log("OTP Email sent! Preview URL:", nodemailer.getTestMessageUrl(info));
+  await transporter.sendMail(mailOptions);
+
 };

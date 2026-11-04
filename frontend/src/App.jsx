@@ -14,10 +14,10 @@ import {
   getDashboardSummary, getDashboardActivity,
   getMyListings, getMarketplace, getListing,
   createListing, updateListingStatus, deleteListing,
-  getOrders, createOrder, updateOrderStatus,
+  getOrders, createOrder, updateOrderStatus,getOrderReview, createReview, getSellerRating,
   getPrices, getLatestPrice,
   getProfile, updateProfile,
-  getRecommendation,completeOnboarding,
+  getRecommendation,getRecommendationHistory,completeOnboarding,
   adminListUsers, adminVerifyUser,
   adminListPrices, adminCreatePrice,
   adminListReports,
@@ -664,23 +664,25 @@ function Login({ goto, onLogin, mode, setMode }) {
   const [otp, setOtp] = useState("");
   const [userId, setUserId] = useState(null);
 
-  const handleSubmit = async () => {
+   const handleSubmit = async () => {
     setError("");
     setLoading(true);
     try {
       let data;
-      
-      if (mode === "login") {
-        if (otpMode) {
-          data = await verifyLoginOTP(userId, otp);
-        } else {
-          data = await loginUser({ email, password });
-          if (data.requires2FA) {
-            setUserId(data.userId);
-            setOtpMode(true);
-            setLoading(false);
-            return; 
-          }
+
+      // 1. IF WE ARE IN OTP MODE, VERIFY THE CODE
+      if (otpMode) {
+        data = await verifyLoginOTP(userId, otp);
+      } 
+      // 2. OTHERWISE, HANDLE NORMAL LOGIN / REGISTER
+      else if (mode === "login") {
+        data = await loginUser({ email, password });
+        
+        if (data.requires2FA) {
+          setUserId(data.userId);
+          setOtpMode(true);
+          setLoading(false);
+          return; 
         }
       } else {
         // Registration flow
@@ -708,11 +710,17 @@ function Login({ goto, onLogin, mode, setMode }) {
     try {
       const data = await googleLogin(credentialResponse.credential);
       
+      // 1. Check if the backend requires 2FA
+      if (data.requires2FA) {
+        setUserId(data.userId);
+        setOtpMode(true);
+        setLoading(false);
+        return; 
+      }
       localStorage.setItem("beanlink_token", data.token);
       localStorage.setItem("beanlink_user", JSON.stringify(data.user));
-      
-      // Use the same logic as handleLogin
       onLogin(data.user); 
+      
     } catch (err) {
       setError(err.message || "Google login failed.");
     } finally {
@@ -946,7 +954,7 @@ function FarmerDashboard({ goto, user }) {
   const [priceSeries, setPriceSeries] = useState([]);
   const [latest, setLatest] = useState(null);
   const [loading, setLoading] = useState(true);
-
+const [showAllActivity, setShowAllActivity] = useState(false);
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -1059,13 +1067,25 @@ function FarmerDashboard({ goto, user }) {
         </div>
       </div>
 
-      <div className="agri-card p-5">
-        <h3 className="font-semibold mb-4">Recent Activity</h3>
+            <div className="agri-card p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold">Recent Activity</h3>
+          {activity.length > 5 && (
+            <button 
+              onClick={() => setShowAllActivity(!showAllActivity)}
+              className="text-xs font-semibold"
+              style={{ color: "var(--primary)" }}
+            >
+              {showAllActivity ? "Show Less" : "Show All"}
+            </button>
+          )}
+        </div>
+
         {activity.length === 0 ? (
           <p className="text-sm" style={{ color: "var(--text-faint)" }}>No activity yet.</p>
         ) : (
           <div className="space-y-3">
-            {activity.map((a, i) => {
+            {(showAllActivity ? activity : activity.slice(0, 5)).map((a, i) => {
               const Icon = a.kind === "order" ? ClipboardList : a.kind === "listing" ? Wheat : Receipt;
               return (
                 <div key={i} className="flex items-center gap-3 text-sm">
@@ -1229,32 +1249,60 @@ function InputRecommendation({ goto, initialResult = null, onResult = null }) {
   const [result, setResult] = useState(initialResult);
   const [marketplaceListings, setMarketplaceListings] = useState([]);
   const [history, setHistory] = useState([]);
-  
-  // Default form state
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState("");
   const [form, setForm] = useState({
     beanVariety: "Kenya Umoja",
     season: "Long Rains",
-    county: "Machakos",
+    locality: "",
+    challenge: "",
+    // Soil test fields
+    hasSoilTest: false,
+    ph: "",
+    tot_carbon: "",
   });
   
   const update = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const isUnsupported = form.beanVariety === "Other";
 
-  // Load the farmer's saved recommendations once.
+  // Load history
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const data = await getRecommendationHistory();
-        if (!cancelled) setHistory(data.recommendations || []);
-      } catch {
-        if (!cancelled) setHistory([]);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
+  let cancelled = false;
 
-  // Reload the history after a new recommendation is saved.
+  async function loadHistory() {
+    try {
+      const data = await getRecommendationHistory();
+
+      if (!Array.isArray(data.recommendations)) {
+        throw new Error(
+          "Unexpected history response: expected a recommendations array."
+        );
+      }
+
+      if (!cancelled) {
+        setHistory(data.recommendations);
+        setHistoryError("");
+      }
+    } catch (err) {
+      console.error("Recommendation history failed:", err);
+
+      if (!cancelled) {
+        setHistoryError(
+          err.message || "Could not load your saved recommendations."
+        );
+      }
+    } finally {
+      if (!cancelled) setHistoryLoading(false);
+    }
+  }
+
+  loadHistory();
+
+  return () => {
+    cancelled = true;
+  };
+}, []);
+
   const refreshHistory = async () => {
     try {
       const data = await getRecommendationHistory();
@@ -1270,7 +1318,11 @@ function InputRecommendation({ goto, initialResult = null, onResult = null }) {
       const data = await getRecommendation({
         variety: form.beanVariety,
         season: form.season,
-        county: form.county,
+        locality: form.locality || null,
+        challenge: form.challenge || null,
+        // Only send soil data if they checked the box and entered values
+        ph: form.hasSoilTest && form.ph ? Number(form.ph) : null,
+        tot_carbon: form.hasSoilTest && form.tot_carbon ? Number(form.tot_carbon) : null,
       });
       setResult(data);
       if (onResult) onResult(data);
@@ -1287,7 +1339,7 @@ function InputRecommendation({ goto, initialResult = null, onResult = null }) {
     }
   };
 
-  // Rebuild the result view from a saved record.
+  // Rebuild from history
   const openFromHistory = (h) => {
     setResult({
       recommendation: {
@@ -1303,7 +1355,7 @@ function InputRecommendation({ goto, initialResult = null, onResult = null }) {
     if (onResult) onResult(null);
   };
 
-  // Fetch marketplace listings to check availability
+  // Fetch marketplace
   useEffect(() => {
     if (!result) return;
     let cancelled = false;
@@ -1318,47 +1370,88 @@ function InputRecommendation({ goto, initialResult = null, onResult = null }) {
     return () => { cancelled = true; };
   }, [result]);
 
-  // --- REUSABLE HISTORY COMPONENT ---
-  const historyUI = history.length > 0 && (
-    <div className="mt-12 pt-8 border-t" style={{ borderColor: "var(--border)" }}>
-      <h3 className="font-bold text-lg mb-4" style={{ color: "var(--text)" }}>Recent comparisons</h3>
+  // Reusable History UI
+  const historyUI = (
+  <section
+    className="mt-10 pt-6 border-t"
+    style={{ borderColor: "var(--border)" }}
+  >
+    <h3
+      className="font-bold text-lg mb-4"
+      style={{ color: "var(--text)" }}
+    >
+      Past recommendations
+    </h3>
+
+    {historyLoading ? (
+      <p className="text-sm" role="status">
+        Loading your saved recommendations…
+      </p>
+    ) : historyError ? (
+      <p
+        className="text-sm p-4 rounded"
+        role="alert"
+        style={{
+          background: "var(--red-soft)",
+          color: "var(--red)",
+        }}
+      >
+        {historyError}
+      </p>
+    ) : history.length === 0 ? (
+      <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+        No saved recommendations were returned for your account.
+      </p>
+    ) : (
       <div className="grid sm:grid-cols-2 gap-3">
-        {history.slice(0, 4).map((h) => (
+        {history.map((h) => (
           <button
             key={h.rec_id}
             type="button"
-            onClick={() => openFromHistory(h)}
-            className="text-left p-4 rounded-lg border flex items-center justify-between gap-3 transition-colors hover:border-[var(--primary)]"
-            style={{ borderColor: "var(--border)", background: "var(--surface)" }}
+            onClick={() => {
+              openFromHistory(h);
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+            className="agri-card text-left p-4 flex items-center justify-between gap-3"
           >
-            <div className="min-w-0">
-              <div className="font-bold text-sm" style={{ color: "var(--primary-dark)" }}>
-                {beanLabel(h.variety)} 
+            <div>
+              <div
+                className="font-semibold text-sm"
+                style={{ color: "var(--primary-dark)" }}
+              >
+                {beanLabel(h.variety) || h.variety || "Variety not recorded"}
               </div>
-              <div className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-                {h.season} · {h.recommended_fertilizer || "No fertilizer"}
+
+              <div
+                className="text-xs mt-1"
+                style={{ color: "var(--text-muted)" }}
+              >
+                {h.season || "Season not recorded"} ·{" "}
+                {h.recommended_fertilizer || "Fertilizer not recorded"}
               </div>
-              <div className="text-[10px] uppercase tracking-wide mt-2 font-semibold" style={{ color: "var(--text-faint)" }}>
-                {fmtDate(h.created_at)}
+
+              <div
+                className="text-xs mt-2"
+                style={{ color: "var(--text-faint)" }}
+              >
+                {h.created_at ? fmtDate(h.created_at) : "Date not recorded"}
               </div>
             </div>
-            <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ background: "var(--primary-soft)" }}>
-              <ChevronRight size={16} style={{ color: "var(--primary)" }} />
-            </div>
+
+            <ChevronRight size={18} className="shrink-0" />
           </button>
         ))}
       </div>
-    </div>
-  );
-
-  // --- RENDER STATES ---
+    )}
+  </section>
+);
 
   // 1. LOADING STATE
   if (loading) {
     return (
       <div className="max-w-2xl mx-auto py-4">
         <SectionHeading
-          eyebrow="Machine Learning Advisor"
+          eyebrow="Input Advisory"
           title="Running trial comparison..."
           subtitle="Analyzing historical field trials to find your best input package."
         />
@@ -1376,7 +1469,7 @@ function InputRecommendation({ goto, initialResult = null, onResult = null }) {
     );
   }
 
-    // 2. RESULT STATE
+  // 2. RESULT STATE
   if (result) {
     const rec = result.recommendation || {};
     const explanation = Array.isArray(result.explanation) ? result.explanation : [];
@@ -1394,9 +1487,8 @@ function InputRecommendation({ goto, initialResult = null, onResult = null }) {
     return (
       <div className="max-w-2xl mx-auto py-4">
         <SectionHeading
-          eyebrow="Smart Advice"
+          eyebrow="Input Advisory"
           title="Your Best Match"
-          subtitle="Based on 25 real bean farm trials in Kenya between 2010 and 2012."
         />
  
         <div className="grid sm:grid-cols-3 gap-3 mb-6 mt-6">
@@ -1411,7 +1503,7 @@ function InputRecommendation({ goto, initialResult = null, onResult = null }) {
           />
           <RecommendedInputCard
             icon={Beaker}
-            label="Fertilizer to use"
+            label="Fertilizer in the ranked package"
             value={rec.fertilizerDisplay || rec.fertilizer || "—"}
             searchTerms={fertilizerTerms}
             marketplaceListings={marketplaceListings}
@@ -1429,6 +1521,36 @@ function InputRecommendation({ goto, initialResult = null, onResult = null }) {
           />
         </div>
  
+        {/* ML Summary */}
+        {result.summary && (
+          <div className="mb-5 p-4 rounded-lg" style={{ background: "var(--surface-alt)" }}>
+            <div className="flex items-center gap-2 mb-2">
+              <Info size={16} style={{ color: "var(--primary)" }} />
+              <span className="text-sm font-bold" style={{ color: "var(--primary-dark)" }}>Model Comparison</span>
+            </div>
+            <p className="text-sm" style={{ color: "var(--text)" }}>
+              {result.summary}
+            </p>
+          </div>
+        )}
+
+        {/* Context Messages */}
+        {result.contextMessages && result.contextMessages.length > 0 && (
+          <div className="p-4 rounded-lg mb-5 space-y-3" style={{ background: "var(--amber-soft)", border: "1px solid var(--amber-border)" }}>
+            <div className="flex items-center gap-2 mb-1">
+              <AlertCircle size={16} style={{ color: "var(--amber)" }} />
+              <span className="text-sm font-bold" style={{ color: "var(--amber)" }}>Your Farm Context</span>
+            </div>
+            {result.contextMessages.map((msg, i) => (
+              <div key={i} className="text-sm flex items-start gap-2" style={{ color: "var(--amber)" }}>
+                <span className="mt-1">•</span>
+                <span>{msg.message}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* SHAP Explanation */}
         {explanation.length > 0 && (
           <div className="agri-card p-6 mb-5">
             <div className="flex items-center gap-2 mb-4">
@@ -1436,9 +1558,9 @@ function InputRecommendation({ goto, initialResult = null, onResult = null }) {
               <span className="text-base font-bold" style={{ color: "var(--primary-dark)" }}>Why this is a good choice</span>
             </div>
             
+            {/* CORRECTED: Removed the false hardcoded claim */}
             <p className="text-sm mb-4 font-medium" style={{ color: "var(--text)" }}>
-              {/* Simplify the summary returned from the backend */}
-              Our research shows this combination gave the best results in past trials.
+              The model ranked these inputs highest for the selected variety and historical season. Its suitability for your specific field has not been established.
             </p>
  
             <div className="space-y-4 mt-6">
@@ -1488,30 +1610,48 @@ function InputRecommendation({ goto, initialResult = null, onResult = null }) {
           </div>
         )}
  
-        {result.disclaimer && (
-          <div
-            className="p-4 rounded-lg mb-6 text-sm flex items-start gap-2"
-            style={{ background: "var(--amber-soft)", color: "var(--amber)", border: "1px solid var(--amber-border)" }}
+        <div
+          className="p-4 rounded-lg mb-6 text-sm flex items-start gap-2"
+          style={{ background: "var(--amber-soft)", color: "var(--amber)", border: "1px solid var(--amber-border)" }}
+        >
+          <AlertCircle size={16} className="shrink-0 mt-0.5" />
+          <span>
+            <strong>Remember:</strong> Your actual harvest depends on your soil, rainfall, and how well you manage the crop. This is a guide based on past research, not a guarantee.
+          </span>
+        </div>
+
+        <div className="flex gap-3">
+          <Button
+            variant="secondary"
+            className="flex-1"
+            onClick={() => {
+              setResult(null);
+              if (onResult) onResult(null);
+            }}
           >
-            <AlertCircle size={16} className="shrink-0 mt-0.5" />
-            <span>
-              <strong>Remember:</strong> Your actual harvest depends on your soil, rainfall, and how well you manage the crop. This is a guide based on past research, not a guarantee.
-            </span>
-          </div>
-        )}
- 
-        {/* ... Buttons and History UI ... */}
+            Get new recommendation
+          </Button>
+          <Button className="flex-1" icon={ShoppingBag} onClick={() => goto("marketplace")}>
+            Browse all inputs
+          </Button>
+        </div>
+
+        {historyUI}
       </div>
     );
   }
+
   // 3. FORM STATE
   return (
     <div className="max-w-2xl mx-auto py-4">
       <div className="mb-8">
         <SectionHeading
           eyebrow="Input Advisory"
+          title="Compare trial packages"
+          subtitle="Select your context to see which input package performs best."
         />
       </div>
+      
       <div className="agri-card p-6 md:p-8 space-y-8 shadow-sm">
 
         {/* Step 1: Variety */}
@@ -1553,7 +1693,6 @@ function InputRecommendation({ goto, initialResult = null, onResult = null }) {
               );
             })}
 
-            {/* Unsupported Variety Card */}
             <button
               type="button"
               onClick={() => update("beanVariety", "Other")}
@@ -1579,10 +1718,7 @@ function InputRecommendation({ goto, initialResult = null, onResult = null }) {
           </div>
         </div>
 
-        {/* Conditional Rendering based on Variety Support */}
-                {isUnsupported ? (
-          
-          /* UNSUPPORTED STATE */
+        {isUnsupported ? (
           <div className="p-5 rounded-lg border animate-in fade-in slide-in-from-top-2 duration-300" style={{ background: "var(--amber-soft)", borderColor: "var(--amber-border)" }}>
             <div className="flex items-start gap-3">
               <AlertCircle size={22} className="shrink-0 mt-0.5" style={{ color: "var(--amber)" }} />
@@ -1594,32 +1730,17 @@ function InputRecommendation({ goto, initialResult = null, onResult = null }) {
                   Our advice is currently based on past research for Rosecoco, Wairimu, and Mwitemania beans. Because we don't have trial data for this variety, we cannot give you a reliable recommendation for it.
                 </p>
                 <div className="flex flex-wrap gap-3">
-                  <Button 
-                    size="sm" 
-                    onClick={() => goto("marketplace")}
-                  >
-                    Browse available seeds
-                  </Button>
-                  <Button 
-                    variant="secondary" 
-                    size="sm" 
-                    onClick={() => goto("faq")}
-                  >
-                    Read Farming Tips
-                  </Button>
+                  <Button size="sm" onClick={() => goto("marketplace")}>Browse available seeds</Button>
+                  <Button variant="secondary" size="sm" onClick={() => goto("faq")}>Read Farming Tips</Button>
                 </div>
               </div>
             </div>
           </div>
-
         ) : (
-
-          /* SUPPORTED STATE */
           <div className="space-y-6 animate-in fade-in duration-300">
             <hr style={{ borderColor: "var(--border)" }} />
             
             {/* Step 2: Season */}
-                       {/* Step 2: Season */}
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold bg-gray-100 text-gray-600">2</div>
@@ -1649,36 +1770,81 @@ function InputRecommendation({ goto, initialResult = null, onResult = null }) {
               </div>
             </div>
 
-            {/* Step 3: County */}
-            <div>
+            {/* Step 3: Farm Context (Locality + Soil + Challenge) */}
+            <div className="bg-gray-50 p-4 rounded-lg border" style={{ borderColor: "var(--border)", background: "var(--surface-alt)" }}>
               <div className="flex items-center gap-2 mb-3">
-                <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold bg-gray-100 text-gray-600">3</div>
+                <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold bg-white text-gray-600 shadow-sm">3</div>
                 <label className="text-sm font-bold" style={{ color: "var(--text)" }}>
-                  County <span className="font-normal text-gray-400">(Optional)</span>
+                  Farm Context <span className="font-normal text-gray-500">(Optional)</span>
                 </label>
               </div>
-              <input
-                className="agri-input"
-                value={form.county}
-                onChange={(e) => update("county", e.target.value)}
-                placeholder="e.g. Machakos"
-              />
+
+              <div className="space-y-4">
+                {/* Locality */}
+                <Field label="Where is your farm? (Village or nearest town)">
+                  <input
+                    className="agri-input"
+                    placeholder="e.g. Kerugoya"
+                    value={form.locality}
+                    onChange={(e) => update("locality", e.target.value)}
+                  />
+                </Field>
+
+                {/* Soil Test Toggle */}
+                <div className="pt-2 border-t" style={{ borderColor: "var(--border)" }}>
+                  <label className="flex items-center gap-2 cursor-pointer mb-3">
+                    <input 
+                      type="checkbox" 
+                      className="w-4 h-4 rounded border-gray-300 text-[var(--primary)] focus:ring-[var(--primary)]"
+                      checked={form.hasSoilTest}
+                      onChange={(e) => update("hasSoilTest", e.target.checked)}
+                    />
+                    <span className="text-sm font-medium" style={{ color: "var(--text)" }}>
+                      I have recent soil test results
+                    </span>
+                  </label>
+
+                  {form.hasSoilTest && (
+                    <div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-top-2">
+                      <Field label="Soil pH" hint="e.g. 5.5">
+                        <input className="agri-input" type="number" step="0.1" value={form.ph} onChange={(e) => update("ph", e.target.value)} />
+                      </Field>
+                      <Field label="Organic Carbon (%)" hint="e.g. 1.8">
+                        <input className="agri-input" type="number" step="0.1" value={form.tot_carbon} onChange={(e) => update("tot_carbon", e.target.value)} />
+                      </Field>
+                    </div>
+                  )}
+                </div>
+
+                {/* Challenge */}
+                <Field label="What is your biggest farming challenge right now?">
+                  <select
+                    className="agri-select"
+                    value={form.challenge}
+                    onChange={(e) => update("challenge", e.target.value)}
+                  >
+                    <option value="">Select a challenge (optional)</option>
+                    <option value="rain">Not enough rain / Drought</option>
+                    <option value="pests">Pests and diseases</option>
+                    <option value="weeds">Too many weeds</option>
+                    <option value="budget">Limited budget for inputs</option>
+                  </select>
+                </Field>
+              </div>
             </div>
 
             <Button className="agri-btn-block h-12 text-base shadow-sm mt-4" onClick={submit} disabled={loading}>
               {loading ? "Running trial comparison..." : "Get Recommendations"}
             </Button>
           </div>
-
         )}
       </div>
- 
-      {/* HISTORY UI ADDED HERE */}
+
       {historyUI}
     </div>
   );
 }
-function Marketplace({ goto, guest = false, initialSearch = "", goBack }) {
+function Marketplace({ goto, guest = false, initialSearch = "", goBack, user}) {
   const { push } = useToast();
   const { confirm } = useModal();
   
@@ -1691,22 +1857,25 @@ function Marketplace({ goto, guest = false, initialSearch = "", goBack }) {
   const [loading, setLoading] = useState(true);
 const [search, setSearch] = useState(initialSearch || "");
   // Cart state
-  const [cart, setCart] = useState(() => {
-  try {
-    const raw = localStorage.getItem("beanlink_cart");
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-});
+  const cartKey = guest ? "beanlink_cart_guest" : `beanlink_cart_${user?.user_id}`;
 
-useEffect(() => {
-  try {
-    localStorage.setItem("beanlink_cart", JSON.stringify(cart));
-  } catch {
-    // storage unavailable (private mode, quota); ignore
-  }
-}, [cart]);
+  const [cart, setCart] = useState(() => {
+    try {
+      const raw = localStorage.getItem(cartKey);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Save to the user-specific key whenever cart changes
+  useEffect(() => {
+    try {
+      localStorage.setItem(cartKey, JSON.stringify(cart));
+    } catch {
+      // storage unavailable
+    }
+  }, [cart, cartKey]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [checkoutItem, setCheckoutItem] = useState(null);
   const [checkoutQty, setCheckoutQty] = useState(1);
@@ -2125,20 +2294,25 @@ const visibleListings = React.useMemo(() => {
       )}
 
       {/* Payment Modal Triggered from Cart */}
-      {checkoutItem && (
+            {checkoutItem && (
         <PaymentModal
           open={paymentOpen}
           listing={checkoutItem}
           quantity={checkoutQty}
           goto={goto}
           onClose={() => setPaymentOpen(false)}
-         onSuccess={() => {
-  removeFromCart(checkoutItem.listing_id, { silent: true });
-  setCheckoutItem(null);
-  setPaymentOpen(false);
-  push("Payment completed!", "green");
-  goto("orders");
-}}
+          onSuccess={() => {
+            // 1. Remove the item from the cart state
+            setCart((prevCart) => prevCart.filter((i) => i.listing_id !== checkoutItem.listing_id));
+            
+            // 2. Clear the checkout selection
+            setCheckoutItem(null);
+            setPaymentOpen(false);
+            
+            // 3. Notify the user and navigate
+            push("Payment completed!", "green");
+            goto("orders");
+          }}
         />
       )}
     </div>
@@ -2152,7 +2326,31 @@ function InputDetail({ item, goto, guest = false }) {
   const [loading, setLoading] = useState(!item);
   const [quantity, setQuantity] = useState(1);
   const [paymentOpen, setPaymentOpen] = useState(false);
-
+ const [sellerRating, setSellerRating] = useState(null); 
+   useEffect(() => {
+    if (!item?.listing_id) return;
+    let cancelled = false;
+    setLoading(true);
+    (async () => {
+      try {
+        const data = await getListing(item.listing_id);
+        if (!cancelled) {
+          setFresh(data.listing);
+          
+          // Fetch the rating for this seller
+          if (data.listing.seller_id) {
+            const ratingData = await getSellerRating(data.listing.seller_id);
+            setSellerRating(ratingData);
+          }
+        }
+      } catch (err) {
+        push(err.message || "Failed to load listing", "red");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [item?.listing_id, push]);
   useEffect(() => {
     if (!item?.listing_id) return;
     let cancelled = false;
@@ -2207,7 +2405,7 @@ function InputDetail({ item, goto, guest = false }) {
   };
 
   return (
-    <div className="max-w-2xl">
+    <div className="max-w-2xl mx-auto py-4">
       <button
         className="flex items-center gap-1 text-sm mb-5"
         style={{ color: "var(--text-muted)" }}
@@ -2240,9 +2438,25 @@ function InputDetail({ item, goto, guest = false }) {
               ? <Badge tone="green" icon={ShieldCheck}>Verified Seller</Badge>
               : <Badge tone="gray">Unverified</Badge>}
           </div>
+           <div>
+            <div className="text-xs mb-1" style={{ color: "var(--text-faint)" }}>Seller Rating</div>
+            {sellerRating && sellerRating.count > 0 ? (
+              <div className="flex items-center gap-1 font-semibold">
+                <span style={{ color: "var(--amber)" }}>★</span>
+                {sellerRating.average} ({sellerRating.count} reviews)
+              </div>
+            ) : (
+              <div className="text-gray-500">No ratings yet</div>
+            )}
+          </div>
+          
           <div>
             <div className="text-xs mb-1" style={{ color: "var(--text-faint)" }}>Price</div>
             <div className="mono font-bold">{fmtKES(fresh.price_per_unit)}</div>
+          </div>
+          <div>
+            <div className="text-xs mb-1" style={{ color: "var(--text-faint)" }}>Unit</div>
+            <div className="mono font-bold">{fresh.unit || "—"}</div>
           </div>
           <div>
             <div className="text-xs mb-1" style={{ color: "var(--text-faint)" }}>Available Quantity</div>
@@ -2357,7 +2571,7 @@ function ProduceDetail({ item, goto, guest = false }) {
   };
 
   return (
-    <div className="max-w-2xl">
+    <div className="max-w-2xl mx-auto py-4">
       <button
         className="flex items-center gap-1 text-sm mb-5"
         style={{ color: "var(--text-muted)" }}
@@ -2461,6 +2675,11 @@ function OrderDetail({ orderId, goto, user }) {
   const [loading, setLoading] = useState(true);
   const [pickupInput, setPickupInput] = useState("");
   const [working, setWorking] = useState(false);
+  
+  // Review states
+  const [rating, setRating] = useState(5);
+  const [comment, setComment] = useState("");
+  const [hasReviewed, setHasReviewed] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -2476,11 +2695,26 @@ function OrderDetail({ orderId, goto, user }) {
 
   useEffect(() => { load(); }, [load]);
 
+  const isBuyer = order?.buyer_id === user.user_id;
+  const isSeller = order?.seller_id === user.user_id;
+
+  // Check if this order has already been reviewed by the buyer
+  useEffect(() => {
+    if (!order || order.fulfillment_status !== "delivered" || !isBuyer) return;
+    
+    const checkReview = async () => {
+      try {
+        const data = await getOrderReview(order.txn_id); 
+        if (data.review) setHasReviewed(true);
+      } catch (err) {
+        // Ignore errors
+      }
+    };
+    checkReview();
+  }, [order, isBuyer]);
+
   if (loading) return <PageSkeleton rows={2} />;
   if (!order) return null;
-
-  const isBuyer = order.buyer_id === user.user_id;
-  const isSeller = order.seller_id === user.user_id;
 
   const methodLabel = order.fulfillment_method === "delivery" ? "Delivery" : "Pickup";
   const statusLabels = {
@@ -2530,9 +2764,26 @@ function OrderDetail({ orderId, goto, user }) {
       setWorking(false);
     }
   };
+  const submitReview = async () => {
+    setWorking(true);
+    try {
+      // Notice we pass order.txn_id as the first argument now
+      await createReview(order.txn_id, {
+        reviewee_id: order.seller_id, 
+        rating: Number(rating),
+        comment: comment || null
+      });
+      push("Review submitted. Thank you!", "green");
+      setHasReviewed(true);
+    } catch (err) {
+      push(err.message || "Failed to submit review", "red");
+    } finally {
+      setWorking(false);
+    }
+  };
 
   return (
-    <div className="max-w-2xl">
+    <div className="max-w-2xl mx-auto py-4">
       <button
         className="flex items-center gap-1 text-sm mb-5"
         style={{ color: "var(--text-muted)" }}
@@ -2625,23 +2876,6 @@ function OrderDetail({ orderId, goto, user }) {
           </div>
         </div>
 
-        {/* Pickup code display for buyer */}
-        {order.fulfillment_method === "pickup"
-          && order.pickup_code
-          && isBuyer
-          && order.fulfillment_status !== "delivered" && (
-          <div className="p-4 rounded mb-4"
-               style={{ background: "var(--primary-soft)", border: "1px solid var(--primary-soft-border)" }}>
-            <div className="text-xs font-semibold uppercase tracking-wide mb-1"
-                 style={{ color: "var(--primary)" }}>
-              Pickup code — show this to the seller
-            </div>
-            <div className="mono text-3xl font-bold" style={{ color: "var(--primary-dark)", letterSpacing: 4 }}>
-              {order.pickup_code}
-            </div>
-          </div>
-        )}
-
         {/* Seller actions */}
         {isSeller && order.fulfillment_status === "awaiting_seller" && (
           <div className="flex gap-2">
@@ -2676,46 +2910,92 @@ function OrderDetail({ orderId, goto, user }) {
             )}
           </div>
         )}
-
+        
+        {/* SELLER confirmation for pickup */}
+        {isSeller && order.fulfillment_status === "ready_for_pickup" && (
+          <div className="space-y-3 mt-4 p-4 rounded-lg border" style={{ borderColor: "var(--primary-soft-border)", background: "var(--primary-soft)" }}>
+            <h4 className="font-bold text-sm" style={{ color: "var(--primary-dark)" }}>Confirm Handover</h4>
+            <p className="text-xs" style={{ color: "var(--primary-dark)" }}>
+              Ask the buyer for their 6-digit pickup code and enter it below to complete the order.
+            </p>
+            <Field label="Enter Buyer's Pickup Code">
+              <input
+                className="agri-input mono"
+                value={pickupInput}
+                onChange={(e) => setPickupInput(e.target.value.toUpperCase())}
+                placeholder="e.g. A3K9P2"
+                maxLength={6}
+              />
+            </Field>
+            <Button className="agri-btn-block" disabled={working || pickupInput.length < 4} onClick={confirmReceipt}>
+              {working ? "Confirming…" : "Confirm Handover"}
+            </Button>
+          </div>
+        )}
+        
         {/* Buyer confirmation */}
-        {isBuyer && order.fulfillment_status !== "delivered" && (
-          <div className="space-y-3 mt-4">
-            {order.fulfillment_method === "pickup" && order.fulfillment_status === "ready_for_pickup" && (
-              <>
-                <Field label="Enter the pickup code to confirm collection">
-                  <input
-                    className="agri-input mono"
-                    value={pickupInput}
-                    onChange={(e) => setPickupInput(e.target.value.toUpperCase())}
-                    placeholder="e.g. A3K9P2"
-                    maxLength={6}
-                  />
-                </Field>
-                <Button className="agri-btn-block" disabled={working || pickupInput.length < 4} onClick={confirmReceipt}>
-                  {working ? "Confirming…" : "Confirm receipt"}
-                </Button>
-              </>
-            )}
-            {order.fulfillment_method === "delivery" && order.fulfillment_status === "dispatched" && (
-              <Button className="agri-btn-block" disabled={working} onClick={confirmReceipt}>
-                {working ? "Confirming…" : "Confirm delivery received"}
-              </Button>
-            )}
-            {order.fulfillment_status === "awaiting_seller" && (
-              <div className="text-xs text-center" style={{ color: "var(--text-faint)" }}>
-                {order.fulfillment_method === "pickup"
-                  ? "Waiting for the seller to prepare your order."
-                  : "Waiting for the seller to dispatch your order."}
-              </div>
-            )}
+        {isBuyer && order.fulfillment_method === "pickup" && order.pickup_code && order.fulfillment_status !== "delivered" && (
+          <div className="p-4 rounded mb-4" style={{ background: "var(--primary-soft)", border: "1px solid var(--primary-soft-border)" }}>
+            <div className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: "var(--primary)" }}>
+              Show this code to the seller when you collect your order
+            </div>
+            <div className="mono text-3xl font-bold" style={{ color: "var(--primary-dark)", letterSpacing: 4 }}>
+              {order.pickup_code}
+            </div>
           </div>
         )}
 
+        {/* Delivered status */}
         {order.fulfillment_status === "delivered" && (
           <div className="p-3 rounded text-sm flex items-center gap-2 mt-4"
                style={{ background: "var(--primary-soft)", border: "1px solid var(--primary-soft-border)", color: "var(--primary-dark)" }}>
             <CheckCircle2 size={16} />
             Delivered {fmtDate(order.delivered_at)}
+          </div>
+        )}
+
+        {/* RATING / REVIEWS SECTION (Buyer only, after delivery) */}
+        {isBuyer && order.fulfillment_status === "delivered" && (
+          <div className="mt-6 pt-6 border-t" style={{ borderColor: "var(--border)" }}>
+            <h4 className="font-semibold mb-3">Rate this Seller</h4>
+            
+            {hasReviewed ? (
+              <div className="p-3 rounded text-sm flex items-center gap-2" 
+                   style={{ background: "var(--surface-alt)", color: "var(--text-muted)" }}>
+                <CheckCircle2 size={16} style={{ color: "var(--primary)" }} />
+                You have already submitted a review for this order.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <Field label="Rating (1-5 stars)">
+                  <select 
+                    className="agri-select" 
+                    value={rating} 
+                    onChange={(e) => setRating(e.target.value)}
+                  >
+                    <option value="5">5 - Excellent</option>
+                    <option value="4">4 - Good</option>
+                    <option value="3">3 - Average</option>
+                    <option value="2">2 - Poor</option>
+                    <option value="1">1 - Terrible</option>
+                  </select>
+                </Field>
+                
+                <Field label="Comment (optional)">
+                  <textarea
+                    className="agri-textarea"
+                    rows={2}
+                    value={comment}
+                    onChange={(e) => setComment(e.target.value)}
+                    placeholder="How was the quality of the produce/inputs?"
+                  />
+                </Field>
+                
+                <Button className="agri-btn-block" onClick={submitReview} disabled={working}>
+                  {working ? "Submitting..." : "Submit Review"}
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -3266,7 +3546,24 @@ function MarketPrices({ guest, goto }) {
         title="Bean Market Prices"
         subtitle="Recorded bean prices from market observations."
       />
-
+ {/* --- ADD THIS BANNER --- */}
+      <div className="p-3.5 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm" 
+           style={{ background: "var(--blue-soft)", border: "1px solid var(--blue-border)", color: "var(--blue)" }}>
+        <div className="flex items-start gap-2">
+          <Info size={16} className="shrink-0 mt-0.5" />
+          <span>
+            Prices are updated periodically from the official KAMIS portal. For the absolute latest daily prices, check the live source.
+          </span>
+        </div>
+        <a 
+          href="https://kamis.kilimo.go.ke" 
+          target="_blank" 
+          rel="noreferrer"
+          className="shrink-0 font-semibold underline hover:opacity-80 flex items-center gap-1"
+        >
+          Visit KAMIS <ChevronRight size={14} />
+        </a>
+      </div>
       {guest && (
         <div
           className="p-3 rounded text-sm flex items-center gap-2"
@@ -3521,8 +3818,8 @@ function Orders({ goto, user }) {
 
   // Farmers and suppliers see orders for their products (they're the seller).
   // Buyers see orders they placed (they're the buyer).
-const myRole = user?.role === "buyer" ? "buyer" : user?.role === "admin" ? "all" : "seller";
-  const load = useCallback(async () => {
+  const myRole = "all";
+      const load = useCallback(async () => {
     setLoading(true);
     try {
       const params = { role: myRole };
@@ -3724,14 +4021,22 @@ function Transactions() {
         if (status !== "all") params.status = status.toLowerCase();
         const data = await getOrders(params);
         if (cancelled) return;
-        let list = (data.orders || []).map((o) => ({
-          id: `TXN-${o.id.replace("ORD-", "")}`,
-          date: o.date,
-          type: o.counterparty.includes("(Seller)") ? "Input Purchase" : "Produce Sale",
-          description: `${o.item} · ${o.counterparty}`,
-          amount: o.counterparty.includes("(Seller)") ? -o.amount : o.amount,
-          status: o.status,
-        }));
+        
+        // Transform the orders into transaction records
+        let list = (data.orders || []).map((o) => {
+          const isSeller = o.myRole === "seller";
+          
+          return {
+            id: `TXN-${o.id.replace("ORD-", "")}`,
+            date: o.date,
+            type: isSeller ? "Produce Sale" : "Input Purchase",
+            description: `${o.item} · ${isSeller ? "Sold to" : "Bought from"} ${o.counterpartyName}`,
+            // If I sold, money comes in (+). If I bought, money goes out (-).
+            amount: isSeller ? o.amount : -o.amount,
+            status: o.status,
+          };
+        });
+        
         if (type !== "all") list = list.filter((t) => t.type === type);
         setRows(list);
       } catch (err) {
@@ -3797,7 +4102,6 @@ function Transactions() {
     </div>
   );
 }
-
 /* ============================================================================
    PROFILE
    ========================================================================== */
@@ -4268,12 +4572,22 @@ function AdminMarketPrices() {
         <div className="space-y-5 lg:col-span-1 h-fit">
           
           {/* BULK KAMIS CSV IMPORT CARD */}
+                   {/* BULK KAMIS CSV IMPORT CARD */}
           <div className="agri-card p-5 border-emerald-200 bg-emerald-50/30">
             <div className="flex items-center gap-2 mb-3">
-              <h3 className="font-semibold text-gray-900">Bulk CSV/Excel Upload</h3>
+              <h3 className="font-semibold text-gray-900">Periodic KAMIS Import</h3>
             </div>
             <p className="text-xs text-gray-600 mb-4">
-              Import price spreadsheets exported directly from the KAMIS portal (<code>kamis.kilimo.go.ke</code>).
+              Download the latest CSV export from the{" "}
+              <a 
+                href="https://kamis.kilimo.go.ke" 
+                target="_blank" 
+                rel="noreferrer"
+                className="text-emerald-700 underline font-semibold"
+              >
+                official KAMIS portal
+              </a>{" "}
+              and upload it here to update the public dashboard.
             </p>
 
             <div className="space-y-3">
@@ -4298,7 +4612,7 @@ function AdminMarketPrices() {
                 onClick={handleBulkImport}
                 disabled={uploading || !csvFile}
               >
-                {uploading ? "Importing Records..." : "Upload & Populate Dashboard"}
+                {uploading ? "Importing Records..." : "Upload & Update Dashboard"}
               </Button>
             </div>
           </div>
@@ -4609,8 +4923,10 @@ const goBack = () => {
   const goLogin = () => goto("login");
   const goRegister = () => goto("register");
 
-  const handleLogin = (user) => {
+   const handleLogin = (user) => {
     setSession(user);
+    
+    // Check if they have completed onboarding
     if (user.onboarding_completed === false) {
       setPage("onboarding");
     } else {
@@ -4639,10 +4955,17 @@ const goBack = () => {
     localStorage.setItem("beanlink_user", JSON.stringify(merged));
     setSession(merged);
   };
-
   const handleLogout = () => {
+    // Clear auth tokens
     localStorage.removeItem("beanlink_token");
     localStorage.removeItem("beanlink_user");
+    
+    // Clear the user's cart
+    if (session?.user_id) {
+      localStorage.removeItem(`beanlink_cart_${session.user_id}`);
+    }
+    localStorage.removeItem("beanlink_cart_guest");
+
     setSession(null);
     setPage("landing");
   };
@@ -4739,6 +5062,7 @@ case "marketplace":
       goto={goto}
       goBack={goBack}
       initialSearch={selectedItem?.search || ""}
+      user={session}
     />
   );
         case "onboarding":

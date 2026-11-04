@@ -1,100 +1,95 @@
 const pool = require('../config/db');
 
 const VALID_STATUSES = ['pending', 'confirmed', 'processing', 'completed', 'cancelled'];
-const IDEMPOTENCY_WINDOW_MINUTES = 5;
+const IDEMPOTENCY_WINDOW_MINUTES = 3;
 
 /* ============================================================================
    GET /api/orders?role=seller|buyer|all&status=
    ========================================================================== */
 exports.getOrders = async (req, res) => {
+  const { role, status } = req.query;
   const userId = req.user.user_id;
-  const { role = 'all', status } = req.query;
-
-  const filters = [];
+  
+  let query = `
+    SELECT 
+      t.txn_id,
+      t.total_amount,
+      t.status,
+      t.payment_status,
+      t.fulfillment_method,
+      t.fulfillment_status,
+      t.delivery_address,
+      t.delivery_landmark,
+      t.created_at,
+      t.buyer_id,
+      l.listing_id,
+      l.title,
+      l.variety,
+      l.location,
+      l.seller_id,
+      oi.quantity,
+      buyer.full_name as buyer_name,
+      buyer.phone_number as buyer_phone,
+      seller.full_name as seller_name,
+      seller.phone_number as seller_phone
+    FROM transactions t
+    JOIN order_items oi ON oi.txn_id = t.txn_id
+    JOIN listings l ON l.listing_id = oi.listing_id
+    JOIN users buyer ON t.buyer_id = buyer.user_id
+    JOIN users seller ON l.seller_id = seller.user_id
+    -- THIS IS THE CRITICAL FIX: Show orders where I am the buyer OR the seller
+    WHERE (t.buyer_id = $1 OR l.seller_id = $1)
+  `;
   const params = [userId];
-  let i = 2;
 
-  if (role === 'seller') filters.push(`l.seller_id = $1`);
-  else if (role === 'buyer') filters.push(`t.buyer_id = $1`);
-  else filters.push(`(l.seller_id = $1 OR t.buyer_id = $1)`);
+  // If they explicitly filter by role, apply it
+  if (role === 'buyer') {
+    query += ` AND t.buyer_id = $1`;
+  } else if (role === 'seller') {
+    query += ` AND l.seller_id = $1`;
+  }
 
-  if (status) { filters.push(`t.status = $${i++}`); params.push(status); }
+  if (status) {
+    query += ` AND t.status = $${params.length + 1}`;
+    params.push(status);
+  }
+
+  query += ` ORDER BY t.created_at DESC`;
 
   try {
-    const { rows } = await pool.query(
-      `SELECT
-         t.txn_id AS order_id,
-         t.status,
-         t.total_amount AS amount,
-         t.created_at AS date,
-         t.fulfillment_method,
-         t.fulfillment_status,
-         t.delivery_address,
-         t.delivery_landmark,
-         t.pickup_code,
-         t.buyer_id,
-         buyer.full_name AS buyer_name,
-         buyer.phone_number AS buyer_phone,
-         buyer.county AS buyer_county,
-         l.listing_id,
-         l.title AS item,
-         l.location AS listing_location,
-         l.seller_id,
-         seller.full_name AS seller_name,
-         seller.phone_number AS seller_phone,
-         seller.county AS seller_county,
-         oi.quantity,
-         oi.unit_price
-       FROM transactions t
-       JOIN order_items oi ON oi.txn_id = t.txn_id
-       JOIN listings l ON l.listing_id = oi.listing_id
-       JOIN users buyer ON buyer.user_id = t.buyer_id
-       JOIN users seller ON seller.user_id = l.seller_id
-      WHERE ${filters.join(' AND ')}
-      ORDER BY t.created_at DESC
-      LIMIT 200`,
-      params
-    );
-
-    res.json({
-      orders: rows.map((r) => {
-        const iAmBuyer = r.buyer_id === userId;
-        const iAmSeller = r.seller_id === userId;
-
-        return {
-          id: `ORD-${r.order_id}`,
-          rawId: r.order_id,
-          item: r.item,
-          quantity: `${r.quantity} kg`,
-          amount: Number(r.amount),
-          date: r.date,
-          status: r.status.charAt(0).toUpperCase() + r.status.slice(1),
-
-          myRole: iAmBuyer ? 'buyer' : 'seller',
-
-          counterparty: iAmBuyer
-            ? `${r.seller_name} (Seller)`
-            : `${r.buyer_name} (Buyer)`,
-          counterpartyName: iAmBuyer ? r.seller_name : r.buyer_name,
-          counterpartyPhone: iAmBuyer ? r.seller_phone : r.buyer_phone,
-          counterpartyLocation: iAmBuyer
-            ? r.listing_location || r.seller_county
-            : r.buyer_county,
-
-          fulfillmentMethod: r.fulfillment_method,
-          fulfillmentStatus: r.fulfillment_status,
-          deliveryAddress: r.delivery_address,
-          deliveryLandmark: r.delivery_landmark,
-          pickupCode: r.pickup_code,
-        };
-      }),
+    const { rows } = await pool.query(query, params);
+    
+    const orders = rows.map(r => {
+      // Determine if the current user is the buyer or seller for this specific order
+      const isBuyer = r.buyer_id === userId;
+      
+      return {
+        id: `ORD-${r.txn_id}`,
+        rawId: r.txn_id,
+        item: r.title || r.variety,
+        // If I'm the buyer, show me the seller's name. If I'm the seller, show the buyer's name.
+        counterpartyName: isBuyer ? r.seller_name : r.buyer_name,
+        counterpartyPhone: isBuyer ? r.seller_phone : r.buyer_phone,
+        counterpartyLocation: r.location,
+        quantity: r.quantity,
+        amount: r.total_amount,
+        date: r.created_at,
+        status: r.status,
+        fulfillmentMethod: r.fulfillment_method,
+        fulfillmentStatus: r.fulfillment_status,
+        deliveryAddress: r.delivery_address,
+        deliveryLandmark: r.delivery_landmark,
+        // This is what your UI uses to show the right buttons!
+        myRole: isBuyer ? "buyer" : "seller" 
+      };
     });
+
+    res.json({ orders });
   } catch (err) {
-    console.error('getOrders', err);
-    res.status(500).json({ error: 'Failed to load orders' });
+    console.error('getOrders error:', err);
+    res.status(500).json({ error: 'Failed to fetch orders' });
   }
 };
-
 /* ============================================================================
    GET /api/orders/:id
    ========================================================================== */
@@ -387,12 +382,16 @@ exports.buyerConfirm = async (req, res) => {
   const { pickup_code } = req.body;
 
   try {
-    const { rows: [order] } = await pool.query(
-      `SELECT txn_id, fulfillment_method, fulfillment_status, pickup_code
-         FROM transactions
-        WHERE txn_id = $1 AND buyer_id = $2`,
+    // Check if user is buyer OR seller for this order
+       const { rows: [order] } = await pool.query(
+      `SELECT t.txn_id, t.fulfillment_method, t.fulfillment_status, t.pickup_code, t.buyer_id, l.seller_id
+         FROM transactions t
+         JOIN order_items oi ON oi.txn_id = t.txn_id
+         JOIN listings l ON l.listing_id = oi.listing_id
+        WHERE t.txn_id = $1 AND (t.buyer_id = $2 OR l.seller_id = $2)`,
       [req.params.id, userId]
     );
+    
     if (!order) return res.status(404).json({ error: 'Order not found or not yours' });
 
     if (order.fulfillment_method === 'pickup') {
@@ -400,6 +399,10 @@ exports.buyerConfirm = async (req, res) => {
         return res.status(400).json({ error: 'Incorrect pickup code' });
       }
     } else {
+      // Delivery confirmation (only buyer should do this)
+      if (userId !== order.buyer_id) {
+         return res.status(403).json({ error: 'Only the buyer can confirm delivery.' });
+      }
       if (order.fulfillment_status !== 'dispatched') {
         return res.status(400).json({ error: 'Order has not been dispatched yet' });
       }
@@ -419,5 +422,69 @@ exports.buyerConfirm = async (req, res) => {
   } catch (err) {
     console.error('buyerConfirm', err);
     res.status(500).json({ error: 'Failed to confirm receipt' });
+  }
+};
+exports.getOrderReview = async (req, res) => {
+  const { txnId } = req.params;
+  const userId = req.user.user_id;
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM reviews WHERE txn_id = $1 AND reviewer_id = $2',
+      [txnId, userId]
+    );
+    res.json({ review: rows[0] || null });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to check review' });
+  }
+};
+exports.createReview = async (req, res) => {
+  // Get txn_id from the URL params, not the body
+  const { txnId } = req.params; 
+  const { reviewee_id, rating, comment } = req.body;
+  const reviewer_id = req.user.user_id;
+
+  if (!rating || rating < 1 || rating > 5) {
+    return res.status(400).json({ error: 'Rating must be between 1 and 5' });
+  }
+
+  try {
+    // Check if order is delivered and buyer is the reviewer
+    const check = await pool.query(
+      `SELECT t.txn_id FROM transactions t 
+       WHERE t.txn_id = $1 AND t.buyer_id = $2 AND t.fulfillment_status = 'delivered'`,
+      [txnId, reviewer_id]
+    );
+    
+    if (check.rows.length === 0) {
+      return res.status(403).json({ error: 'You can only review your own delivered orders.' });
+    }
+
+    const { rows } = await pool.query(
+      `INSERT INTO reviews (txn_id, reviewer_id, reviewee_id, rating, comment)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [txnId, reviewer_id, reviewee_id, rating, comment]
+    );
+    res.status(201).json({ review: rows[0] });
+  } catch (err) {
+    if (err.code === '23505') { // Unique violation
+      return res.status(409).json({ error: 'You have already reviewed this order.' });
+    }
+    res.status(500).json({ error: 'Failed to submit review' });
+  }
+};
+exports.getSellerRating = async (req, res) => {
+  const { sellerId } = req.params;
+  try {
+    const { rows } = await pool.query(
+      `SELECT COUNT(*) as count, AVG(rating) as average 
+       FROM reviews WHERE reviewee_id = $1`,
+      [sellerId]
+    );
+    res.json({ 
+      count: parseInt(rows[0].count), 
+      average: rows[0].average ? parseFloat(rows[0].average).toFixed(1) : null 
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch rating' });
   }
 };
