@@ -17,13 +17,15 @@ const recommendationRoutes = require('./routes/recommendationRoutes');
 // --- IMPORT MIDDLEWARE ---
 const authenticateToken = require('./middleware/auth');
 const requireRole = require('./middleware/requireRole');
-
 const app = express();
-
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: [
+    'https://beanlink.pages.dev',
+    'http://localhost:5173',
+  ],
+}));
 app.use(express.json());
-
 // Health Checks
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'api-gateway' });
