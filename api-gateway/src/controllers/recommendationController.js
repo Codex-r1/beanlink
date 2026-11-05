@@ -1,4 +1,4 @@
-const ML_SERVICE_URL = process.env.ML_SERVICE_URL;
+const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'https://beanlink-1.onrender.com';
 const pool = require('../config/db');
 
 exports.getRecommendation = async (req, res) => {
