@@ -1,0 +1,4 @@
+ml-service/venv/
+.env
+*.env
+!*.env.example

@@ -1,0 +1,26 @@
+[33mcommit 25e117903e8f522aeef2867ab78308a566820f4c[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mdev[m[33m, [m[1;31morigin/dev[m[33m)[m
+Author: Codex-r1 <133770036+Codex-r1@users.noreply.github.com>
+Date:   Fri Sep 25 09:38:01 2026 +0300
+
+    Stop tracking .env files
+
+[33mcommit 372a804473f1f14c732399b05155861b2b2cf33e[m
+Author: Codex-r1 <133770036+Codex-r1@users.noreply.github.com>
+Date:   Fri Sep 25 09:17:57 2026 +0300
+
+    Sprint: recommit work without venv; fix gitignore
+
+[33mcommit d848af5f949ad992583a32aa21466c636e2e9fbb[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32mmain[m[33m)[m
+Merge: cef92ae e244f8f
+Author: Ronah Khabayi <133770036+Codex-r1@users.noreply.github.com>
+Date:   Wed Sep 16 12:10:49 2026 +0300
+
+    Merge pull request #1 from Codex-r1/dev
+    
+    Sprint 1: scaffold api-gateway with health check endpoint
+
+[33mcommit e244f8f2f01904c6bb4b9a1daf59608a0f263165[m[33m ([m[1;31morigin/feature/api-gateway-setup[m[33m)[m
+Author: Codex-r1 <133770036+Codex-r1@users.noreply.github.com>
+Date:   Wed Sep 16 12:07:07 2026 +0300
+
+    Sprint 1: scaffold api-gateway with health check endpoint
