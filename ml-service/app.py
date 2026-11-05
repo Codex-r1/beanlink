@@ -176,11 +176,6 @@ def health():
         'varieties': META['variety_options'],
         'seasons': META['season_options'],
     })
-
-
-# ---------------------------------------------------------------------------
-# The recommendation endpoint
-# ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
 # The recommendation endpoint
 # ---------------------------------------------------------------------------
@@ -325,62 +320,6 @@ def recommend():
             "the weather, and how you manage the crop."
         ),
     })
-
-if __name__ == '__main__':
-    port = int(os.getenv('PORT', 5001))
-    app.run(port=port, debug=True)
-@app.route('/recommend', methods=['POST'])
-def recommend():
-    data = request.get_json(silent=True)
-    if data is None:
-        return jsonify({
-            'error': 'Request must be JSON with Content-Type: application/json'
-        }), 400
-
-    variety = data.get('variety')
-    season = data.get('season')
-    county = data.get('county')  # display only, not fed to model
-
-    if not variety or not season:
-        return jsonify({
-            'error': 'Please select a bean variety and a season.'
-        }), 400
-
-    if variety not in META['variety_options']:
-        return jsonify({
-            'error': f'We do not have data for "{variety}". Available: {META["variety_options"]}'
-        }), 400
-
-    if season not in META['season_options']:
-        return jsonify({
-            'error': f'Unknown season "{season}". Available: {META["season_options"]}'
-        }), 400
-
-    # Score every candidate package
-    candidates = build_candidates(variety, season)
-    candidates['predicted_gain'] = pipeline.predict(candidates[FEATURE_COLS])
-    candidates = candidates.sort_values(
-        'predicted_gain', ascending=False
-    ).reset_index(drop=True)
-
-    top = candidates.iloc[0]
-    runner_ups = candidates.iloc[1:4]
-
-    # SHAP on the top recommendation
-    top_row = candidates.iloc[[0]][FEATURE_COLS]
-    explanation = explain_row(top_row, top_n=4)
-
-    # Friendly display values
-    display = variety_display(variety)
-    fert_text = friendly_fertilizer(top['fertilizer_treatment'])
-    lime_text = friendly_lime(top['lime_treatment']).lower()
-    inoc_text = friendly_inoculation(top['inoculation']).lower()
-    summary = (
-        f"For {display['market']} beans planted during the {season.lower()}, "
-        f"past trials showed the best results when using {fert_text} fertilizer, {lime_text}, and {inoc_text}."
-    )
-   
-
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5001))
