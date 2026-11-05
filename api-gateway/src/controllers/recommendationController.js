@@ -1,4 +1,4 @@
-const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://localhost:5001';
+const ML_SERVICE_URL = process.env.ML_SERVICE_URL;
 const pool = require('../config/db');
 
 exports.getRecommendation = async (req, res) => {

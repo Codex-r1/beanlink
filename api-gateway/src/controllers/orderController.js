@@ -346,14 +346,14 @@ exports.sellerAdvance = async (req, res) => {
     let dispatchedAt = null;
 
     if (action === 'ready_for_pickup') {
-      if (method !== 'pickup') return res.status(400).json({ error: 'Order is not a pickup order' });
+      if (method !== 'pickup') return res.status(400).json({ error: 'This is not a pickup order' });
       const { rows: [existing] } = await pool.query(
         `SELECT pickup_code FROM transactions WHERE txn_id = $1`,
         [req.params.id]
       );
       pickupCode = existing.pickup_code || generatePickupCode();
     } else if (action === 'dispatched') {
-      if (method !== 'delivery') return res.status(400).json({ error: 'Order is not a delivery order' });
+      if (method !== 'delivery') return res.status(400).json({ error: 'This is not a delivery order' });
       dispatchedAt = new Date();
     }
 
