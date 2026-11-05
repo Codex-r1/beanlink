@@ -4,7 +4,7 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 exports.sendOTPEmail = async (email, otp) => {
   try {
     await resend.emails.send({
-      from: 'BeanLink <onboarding@resend.dev>', 
+      from: 'BeanLink <noreply@beanlinkapp.site>',
       to: email,
       subject: 'Your BeanLink Login Code',
       html: `<h1>${otp}</h1>`,
