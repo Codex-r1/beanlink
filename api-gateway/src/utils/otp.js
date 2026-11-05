@@ -9,7 +9,7 @@ exports.sendOTPEmail = async (email, otp) => {
   try {
     await resend.emails.send({
       // Use the domain you just verified in Step 1
-      from: 'BeanLink <noreply@beanlinkapp.site', 
+      from: 'BeanLink <beanlinkapp.site>', 
       to: email,
       subject: 'Your BeanLink Login Code',
       html: `<h1>${otp}</h1>`,
