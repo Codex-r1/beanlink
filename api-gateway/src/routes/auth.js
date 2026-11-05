@@ -1,0 +1,10 @@
+const express = require('express');
+const router = express.Router();
+const ctrl = require('../controllers/auth');
+const authenticateToken = require('../middleware/auth'); 
+router.post('/onboarding', authenticateToken, ctrl.completeOnboarding);
+router.post('/register', ctrl.register);
+router.post('/login', ctrl.login);
+router.post('/verify-otp', ctrl.verifyLoginOTP);
+router.post('/google', ctrl.googleLogin);
+module.exports = router;
