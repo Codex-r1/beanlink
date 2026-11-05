@@ -1800,7 +1800,7 @@ function InputRecommendation({ goto, initialResult = null, onResult = null }) {
                       onChange={(e) => update("hasSoilTest", e.target.checked)}
                     />
                     <span className="text-sm font-medium" style={{ color: "var(--text)" }}>
-                      I have recent soil test results
+                      I have the following soil information
                     </span>
                   </label>
 

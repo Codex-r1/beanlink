@@ -1,11 +1,30 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const pool = require('./config/db'); 
+
+// --- IMPORT ALL ROUTES ---
+const authRoutes = require('./routes/auth'); // <-- Added missing routes
+const dashboardRoutes = require('./routes/dashboardRoutes');
+const listingRoutes = require('./routes/listingRoutes');
+const orderRoutes = require('./routes/orderRoutes');
+const priceRoutes = require('./routes/priceRoutes');
+const profileRoutes = require('./routes/profileRoutes');
+const adminRoutes = require('./routes/adminRoutes');
+const paymentRoutes = require('./routes/paymentRoutes');
+const recommendationRoutes = require('./routes/recommendationRoutes');
+
+// --- IMPORT MIDDLEWARE ---
+const authenticateToken = require('./middleware/auth');
+const requireRole = require('./middleware/requireRole');
 
 const app = express();
+
+// Middleware
 app.use(cors());
 app.use(express.json());
 
+// Health Checks
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'api-gateway' });
 });
