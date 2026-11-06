@@ -23,6 +23,7 @@ app.use(cors({
   origin: [
     'https://beanlink.pages.dev',
     'http://localhost:5173',
+    'https://beanlinkapp.site'
   ],
 }));
 app.use(express.json());
