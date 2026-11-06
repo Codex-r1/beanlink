@@ -1243,10 +1243,9 @@ function SupplierDashboard({ goto, user }) {
 /* ============================================================================
    INPUT RECOMMENDATION
    ========================================================================== */
-function InputRecommendation({ goto, initialResult = null, onResult = null }) {
+function InputRecommendation({ goto, result, setResult }) {
   const { open } = useModal();
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState(initialResult);
   const [marketplaceListings, setMarketplaceListings] = useState([]);
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(true);
@@ -1325,7 +1324,6 @@ function InputRecommendation({ goto, initialResult = null, onResult = null }) {
         tot_carbon: form.hasSoilTest && form.tot_carbon ? Number(form.tot_carbon) : null,
       });
       setResult(data);
-      if (onResult) onResult(data);
       refreshHistory(); 
     } catch (err) {
       open({
@@ -1353,7 +1351,6 @@ function InputRecommendation({ goto, initialResult = null, onResult = null }) {
       disclaimer: "This is a saved recommendation from your history. Absolute yields vary by site.",
     };
     setResult(savedResult);
-    if (onResult) onResult(savedResult);
   };
 
   // Fetch marketplace
@@ -1630,7 +1627,6 @@ function InputRecommendation({ goto, initialResult = null, onResult = null }) {
             className="flex-1"
             onClick={() => {
               setResult(null);
-              if (onResult) onResult(null);
             }}
           >
             Get new recommendation
@@ -4928,7 +4924,8 @@ export default function App() {
   } else {
     setPage(p);
   }
-  setSelectedItem(item || null);
+  const fromRecommendation = p === "marketplace" && page === "recommendation" && recommendationResult;
+  setSelectedItem(fromRecommendation ? { ...item, fromRecommendation: true } : item || null);
   window.scrollTo?.(0, 0);
 };
 
@@ -5078,8 +5075,8 @@ if (session && session.onboarding_completed !== true) {
   return (
     <InputRecommendation
       goto={goto}
-      initialResult={recommendationResult}
-      onResult={setRecommendationResult}
+      result={recommendationResult}
+      setResult={setRecommendationResult}
     />
   );
 case "marketplace":
