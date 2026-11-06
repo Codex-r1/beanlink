@@ -1341,7 +1341,7 @@ function InputRecommendation({ goto, initialResult = null, onResult = null }) {
 
   // Rebuild from history
   const openFromHistory = (h) => {
-    setResult({
+    const savedResult = {
       recommendation: {
         seed: h.recommended_seed || h.variety,
         fertilizer: h.recommended_fertilizer,
@@ -1351,8 +1351,9 @@ function InputRecommendation({ goto, initialResult = null, onResult = null }) {
       explanation: Array.isArray(h.shap_values) ? h.shap_values : [],
       summary: h.summary || "",
       disclaimer: "This is a saved recommendation from your history. Absolute yields vary by site.",
-    });
-    if (onResult) onResult(null);
+    };
+    setResult(savedResult);
+    if (onResult) onResult(savedResult);
   };
 
   // Fetch marketplace
@@ -1498,6 +1499,7 @@ function InputRecommendation({ goto, initialResult = null, onResult = null }) {
             value={beanLabel(rec.seed) || "—"}
             note="Make sure this is the seed you have."
             searchTerms={seedTerms}
+            categories={["seed"]}
             marketplaceListings={marketplaceListings}
             goto={goto}
           />
@@ -1506,6 +1508,7 @@ function InputRecommendation({ goto, initialResult = null, onResult = null }) {
             label="Fertilizer in the ranked package"
             value={rec.fertilizerDisplay || rec.fertilizer || "—"}
             searchTerms={fertilizerTerms}
+            categories={["fertilizer"]}
             marketplaceListings={marketplaceListings}
             goto={goto}
           />
@@ -1516,6 +1519,7 @@ function InputRecommendation({ goto, initialResult = null, onResult = null }) {
               rec.inoculationDisplay || rec.inoculation || "—"
             }`}
             searchTerms={limeAndInocTerms}
+            categories={["soil_amendment", "other_input"]}
             marketplaceListings={marketplaceListings}
             goto={goto}
           />
@@ -1844,12 +1848,16 @@ function InputRecommendation({ goto, initialResult = null, onResult = null }) {
     </div>
   );
 }
-function Marketplace({ goto, guest = false, initialSearch = "", goBack, user}) {
+function isOwnListing(listing, user) {
+  return user?.user_id != null && String(listing.seller_id) === String(user.user_id);
+}
+
+function Marketplace({ goto, guest = false, initialSearch = "", initialCategory = "all", fromRecommendation, user }) {
   const { push } = useToast();
   const { confirm } = useModal();
   
   // Marketplace states
-  const [category, setCategory] = useState("all");
+  const [category, setCategory] = useState(initialCategory);
   const [county, setCounty] = useState("all");
   const [variety, setVariety] = useState("all");
   const [sort, setSort] = useState("recent");
@@ -1862,7 +1870,8 @@ const [search, setSearch] = useState(initialSearch || "");
   const [cart, setCart] = useState(() => {
     try {
       const raw = localStorage.getItem(cartKey);
-      return raw ? JSON.parse(raw) : [];
+      const items = raw ? JSON.parse(raw) : [];
+      return Array.isArray(items) ? items.filter((item) => !isOwnListing(item, user)) : [];
     } catch {
       return [];
     }
@@ -1885,8 +1894,9 @@ const [search, setSearch] = useState(initialSearch || "");
     if (category !== "produce" && category !== "all") setVariety("all");
   }, [category]);
 useEffect(() => {
-  setSearch(initialSearch || "");
-}, [initialSearch]);
+  setSearch(initialSearch);
+  setCategory(initialCategory);
+}, [initialSearch, initialCategory]);
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -1898,7 +1908,7 @@ useEffect(() => {
         if (variety !== "all") params.variety = variety;
         if (sort !== "recent") params.sort = sort;
         const data = await getMarketplace(params);
-        if (!cancelled) setListings(data.listings || []);
+        if (!cancelled) setListings((data.listings || []).filter((item) => !isOwnListing(item, user)));
       } catch (err) {
         push(err.message || "Failed to load marketplace", "red");
       } finally {
@@ -1906,7 +1916,7 @@ useEffect(() => {
       }
     })();
     return () => { cancelled = true; };
-  }, [category, county, variety, sort, push]);
+  }, [category, county, variety, sort, push, user]);
 
   const showProduceFilters = category === "produce" || category === "all";
   const counties = ["all", ...new Set(listings.map((p) => p.location).filter(Boolean))];
@@ -1919,6 +1929,10 @@ const visibleListings = React.useMemo(() => {
 }, [listings, search]);
   // Cart functions
   const addToCart = async (item) => {
+    if (isOwnListing(item, user)) {
+      push("You can’t buy your own listing.", "amber");
+      return;
+    }
     if (guest) {
       const ok = await confirm({
         tone: "info",
@@ -1983,6 +1997,10 @@ const visibleListings = React.useMemo(() => {
   );
 
   const startCheckout = (item) => {
+    if (isOwnListing(item, user)) {
+      push("You can’t buy your own listing.", "amber");
+      return;
+    }
     setCheckoutItem(item);
     setCheckoutQty(item.cartQuantity);
     setIsCartOpen(false);
@@ -1991,21 +2009,20 @@ const visibleListings = React.useMemo(() => {
 
   return (
     <div className="relative">
-      {/* Top Header Row with Cart Button */}
-      <div className="flex items-center justify-between gap-4 mb-5">
+      {fromRecommendation && (
+        <button
+          type="button"
+          onClick={() => goto("recommendation")}
+          className="agri-btn agri-btn-ghost agri-btn-sm mb-3"
+        >
+          <ArrowLeft size={15} aria-hidden="true" /> Back to recommendation
+        </button>
+      )}
+      <div className="flex items-start justify-between gap-3">
         <SectionHeading
           title="Marketplace"
-          subtitle="Browse bean produce, seeds, fertilizers, equipment and other farm inputs from verified farmers and suppliers."
+          subtitle="Browse bean produce and farm inputs from farmers and suppliers."
         />
-            {goBack && initialSearch && (
-          <button
-            onClick={goBack}
-            className="flex items-center gap-1 text-sm mb-4"
-            style={{ color: "var(--primary)" }}
-          >
-            <ArrowLeft size={15} /> Back to your recommendation
-          </button>
-        )}
         <button
           onClick={() => setIsCartOpen(true)}
           className="agri-btn agri-btn-secondary relative shrink-0"
@@ -2025,13 +2042,14 @@ const visibleListings = React.useMemo(() => {
       </div>
 
       {/* Category Chips */}
-      <div className="flex gap-2 mb-4 overflow-x-auto agri-scroll pb-1">
+      <div className="flex flex-wrap gap-2 mb-4">
         {CATEGORY_FILTERS.map((c) => {
           const active = category === c.id;
           return (
             <button
               key={c.id}
-              onClick={() => setCategory(c.id)}
+              aria-pressed={active}
+              onClick={() => { setCategory(c.id); setSearch(""); }}
               className="agri-btn agri-btn-sm"
               style={{
                 background: active ? "var(--primary)" : "var(--surface)",
@@ -2076,6 +2094,17 @@ const visibleListings = React.useMemo(() => {
         </Field>
       </div>
 
+      {search && (
+        <div className="agri-card mb-4 flex flex-wrap items-center justify-between gap-2 p-3 text-sm"
+          style={{ background: "var(--primary-soft)", borderColor: "var(--primary-soft-border)" }}>
+          <span>Looking for <strong>{search}</strong></span>
+          <button type="button" className="agri-btn agri-btn-ghost agri-btn-sm"
+            onClick={() => setSearch("")}>
+            <X size={14} aria-hidden="true" /> Clear search
+          </button>
+        </div>
+      )}
+
     {/* Listings Grid */}
 {loading ? (
   <PageSkeleton rows={6} />
@@ -2086,7 +2115,7 @@ const visibleListings = React.useMemo(() => {
       title={`No listings for "${search}"`}
       body="This input isn't currently on the marketplace. Ask for it at your local agrovet using the recommended name."
       action={
-        <Button variant="secondary" onClick={() => setSearch("")}>
+        <Button variant="secondary" onClick={() => { setSearch(""); setCategory("all"); setCounty("all"); setVariety("all"); }}>
           Browse all listings
         </Button>
       }
@@ -2100,40 +2129,27 @@ const visibleListings = React.useMemo(() => {
   )
 ) : (
   <>
-    {search && (
-      <div
-        className="p-2.5 rounded mb-4 flex items-center justify-between text-sm"
-        style={{
-          background: "var(--primary-soft)",
-          border: "1px solid var(--primary-soft-border)",
-          color: "var(--primary-dark)",
-        }}
-      >
-        <span>Showing results for <strong>{search}</strong></span>
-        <button className="font-semibold underline" onClick={() => setSearch("")}>
-          Clear
-        </button>
-      </div>
-    )}
     <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
       {visibleListings.map((p) => {
         const isProduce = p.category === "produce";
+        const listingCategory = CATEGORY_FILTERS.find((c) => c.id === p.category);
+        const ListingIcon = listingCategory?.icon || Package;
         return (
           <div key={p.listing_id} className="agri-card p-4 flex flex-col">
             <div
               className="w-full h-28 rounded mb-3 flex items-center justify-center"
               style={{ background: "var(--surface-alt)" }}
             >
-              <Wheat size={30} color="var(--primary)" />
+              <ListingIcon size={30} color="var(--primary)" aria-hidden="true" />
             </div>
 
             <div className="mb-1">
-              {isProduce && (
+              {listingCategory && (
                 <div
                   className="text-[10px] font-bold uppercase tracking-wider mb-1"
                   style={{ color: "var(--primary)" }}
                 >
-                  Bean Produce
+                  {listingCategory.label}
                 </div>
               )}
               <div className="font-semibold text-sm">
@@ -2319,7 +2335,7 @@ const visibleListings = React.useMemo(() => {
   );
 }
 
-function InputDetail({ item, goto, guest = false }) {
+function InputDetail({ item, goto, guest = false, user, backToMarketplace }) {
   const { push } = useToast();
   const { open, confirm } = useModal();
   const [fresh, setFresh] = useState(item);
@@ -2372,9 +2388,11 @@ function InputDetail({ item, goto, guest = false }) {
   if (!fresh) return null;
 
   const wheat = INPUT_CATEGORIES.find((c) => c.id === fresh.category)?.icon || Package;
+  const ownListing = isOwnListing(fresh, user);
   const available = Number(fresh.quantity_available) > 0;
 
   const requireAuth = async () => {
+    if (ownListing) return false;
     if (guest) {
       const ok = await confirm({
         tone: "info",
@@ -2409,7 +2427,7 @@ function InputDetail({ item, goto, guest = false }) {
       <button
         className="flex items-center gap-1 text-sm mb-5"
         style={{ color: "var(--text-muted)" }}
-        onClick={() => goto("marketplace")}
+        onClick={backToMarketplace || (() => goto("marketplace"))}
       >
         <ArrowLeft size={15} /> Back to Marketplace
       </button>
@@ -2480,7 +2498,7 @@ function InputDetail({ item, goto, guest = false }) {
               className="agri-input"
               value={quantity}
               onChange={(e) => setQuantity(e.target.value)}
-              disabled={!available}
+              disabled={!available || ownListing}
             />
           </Field>
         </div>
@@ -2489,14 +2507,14 @@ function InputDetail({ item, goto, guest = false }) {
           <Button
             variant="secondary"
             className="agri-btn-block"
-            disabled={!available}
+            disabled={!available || ownListing}
             onClick={addToCart}
           >
             Add to Cart
           </Button>
           <Button
             className="agri-btn-block"
-            disabled={!available}
+            disabled={!available || ownListing}
             onClick={placeOrder}
           >
             Buy Now
@@ -2504,8 +2522,9 @@ function InputDetail({ item, goto, guest = false }) {
         </div>
       </div>
 
+      {ownListing && <p className="mt-3 text-sm" role="status">This is your listing.</p>}
       <PaymentModal
-        open={paymentOpen}
+        open={paymentOpen && !ownListing}
         listing={fresh}
         quantity={quantity}
         goto={goto}
@@ -2515,7 +2534,7 @@ function InputDetail({ item, goto, guest = false }) {
     </div>
   );
 }
-function ProduceDetail({ item, goto, guest = false }) {
+function ProduceDetail({ item, goto, guest = false, user, backToMarketplace }) {
   const { push } = useToast();
   const { open, confirm } = useModal();
   const [fresh, setFresh] = useState(item);
@@ -2543,9 +2562,11 @@ function ProduceDetail({ item, goto, guest = false }) {
   if (loading) return <PageSkeleton rows={1} />;
   if (!fresh) return null;
 
+  const ownListing = isOwnListing(fresh, user);
   const available = Number(fresh.quantity_available) > 0;
 
   const requireAuth = async () => {
+    if (ownListing) return false;
     if (guest) {
       const ok = await confirm({
         tone: "info",
@@ -2575,7 +2596,7 @@ function ProduceDetail({ item, goto, guest = false }) {
       <button
         className="flex items-center gap-1 text-sm mb-5"
         style={{ color: "var(--text-muted)" }}
-        onClick={() => goto("marketplace")}
+        onClick={backToMarketplace || (() => goto("marketplace"))}
       >
         <ArrowLeft size={15} /> Back to Marketplace
       </button>
@@ -2640,22 +2661,23 @@ function ProduceDetail({ item, goto, guest = false }) {
               min="1"
               value={quantity}
               onChange={(e) => setQuantity(e.target.value)}
-              disabled={!available}
+              disabled={!available || ownListing}
             />
           </Field>
         </div>
 
         <Button
           className="agri-btn-block mt-4"
-          disabled={!available}
+          disabled={!available || ownListing}
           onClick={placeOrder}
         >
           Place Order
         </Button>
       </div>
 
+      {ownListing && <p className="mt-3 text-sm" role="status">This is your listing.</p>}
       <PaymentModal
-        open={paymentOpen}
+        open={paymentOpen && !ownListing}
         listing={fresh}
         quantity={quantity}
         goto={goto}
@@ -4879,7 +4901,8 @@ export default function App() {
   const [page, setPage] = useState("landing");
   const [authMode, setAuthMode] = useState("login");
   const [selectedItem, setSelectedItem] = useState(null);
-  const [returnTo, setReturnTo] = useState(null); 
+  const [returnTo, setReturnTo] = useState(null);
+  const [recommendationResult, setRecommendationResult] = useState(null);
   useEffect(() => {
     const token = localStorage.getItem("beanlink_token");
     const storedUser = localStorage.getItem("beanlink_user");
@@ -4967,6 +4990,7 @@ const goBack = () => {
     localStorage.removeItem("beanlink_cart_guest");
 
     setSession(null);
+    setRecommendationResult(null);
     setPage("landing");
   };
 if (session && session.onboarding_completed !== true) {
@@ -5054,14 +5078,17 @@ if (session && session.onboarding_completed !== true) {
   return (
     <InputRecommendation
       goto={goto}
+      initialResult={recommendationResult}
+      onResult={setRecommendationResult}
     />
   );
 case "marketplace":
   return (
     <Marketplace
       goto={goto}
-      goBack={goBack}
       initialSearch={selectedItem?.search || ""}
+      initialCategory={selectedItem?.category || "all"}
+      fromRecommendation={selectedItem?.fromRecommendation}
       user={session}
     />
   );
@@ -5070,9 +5097,9 @@ case "marketplace":
       case "faq":
         return <FAQPage goto={goto} goLogin={goLogin} goRegister={goRegister} isAuthenticated={true} />;
       case "input-detail":
-        return <InputDetail item={selectedItem} goto={goto} />;
+        return <InputDetail item={selectedItem} goto={goto} user={session} backToMarketplace={returnTo?.page === "marketplace" ? goBack : undefined} />;
       case "produce-detail":
-        return <ProduceDetail item={selectedItem} goto={goto} />;
+        return <ProduceDetail item={selectedItem} goto={goto} user={session} backToMarketplace={returnTo?.page === "marketplace" ? goBack : undefined} />;
       case "my-listings":
         return <MyListings goto={goto} role={role} />;
       case "list-produce":
