@@ -1,143 +1,246 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Bell } from "lucide-react";
+import { getReportNotifications } from "../api";
 
-/* ============================================================================
-   In-app order alerts. No new table and no new endpoint.
-   Alerts are worked out from the orders your app already loads:
-     - sellers (farmers, suppliers): "New order received" while an order is pending
-     - buyers: "Order update" when an order moves past pending
-   "Read" state is kept in this browser's localStorage, so it is per device.
-   ========================================================================== */
-
-const POLL_MS = 45000;   // refresh every 45 seconds while the tab is visible
-const RECENT_DAYS = 14;  // ignore orders older than this
+const POLL_MS = 45000;
+const RECENT_DAYS = 14;
 const storageKey = (userId) => `beanlink_order_alerts_${userId}`;
 
 function readSeen(userId) {
-  try { return JSON.parse(localStorage.getItem(storageKey(userId))) || {}; }
-  catch { return {}; }
-}
-function writeSeen(userId, map) {
-  try { localStorage.setItem(storageKey(userId), JSON.stringify(map)); }
-  catch { /* storage blocked or full: alerts just stay unread */ }
-}
-
-// Adjust these field names to match what your orders API returns.
-function normalise(o, user) {
-  return {
-    id: o.id ?? o.txn_id,
-    status: String(o.status || "").toLowerCase(),
-    created: o.created_at ?? o.date,
-    isSeller: o.seller_id ? o.seller_id === user.user_id : o.role === "seller",
-    item: o.item ?? o.title ?? "your order",
-    who: o.counterparty ?? o.counterparty_name ?? "",
-  };
+  try {
+    return JSON.parse(localStorage.getItem(storageKey(userId))) || {};
+  } catch {
+    return {};
+  }
 }
 
-function deriveAlerts(orders, user, seen) {
+function writeSeen(userId, seen) {
+  try {
+    localStorage.setItem(storageKey(userId), JSON.stringify(seen));
+  } catch {
+    // The current view can still mark alerts as read.
+  }
+}
+
+function deriveOrderAlerts(orders, userId, seen) {
   const cutoff = Date.now() - RECENT_DAYS * 86400000;
   const alerts = [];
-  for (const raw of orders) {
-    const o = normalise(raw, user);
-    if (o.id == null || !o.status) continue;
-    const time = new Date(o.created).getTime();
-    if (!Number.isNaN(time) && time < cutoff) continue;
-    const unread = seen[o.id] !== o.status;
 
-    if (o.isSeller) {
-      if (o.status !== "pending") continue; // only orders waiting on the seller
-      alerts.push({
-        key: `${o.id}:${o.status}`, id: o.id, status: o.status, unread, time,
-        title: "New order received",
-        body: `${o.item}${o.who ? ` from ${o.who}` : ""}`,
-      });
-    } else {
-      if (o.status === "pending") continue; // buyers placed it themselves
-      alerts.push({
-        key: `${o.id}:${o.status}`, id: o.id, status: o.status, unread, time,
-        title: "Order update",
-        body: `${o.item} is now ${o.status}`,
-      });
-    }
+  for (const order of orders) {
+    const id = order.id ?? order.txn_id;
+    const status = String(order.status || "").toLowerCase();
+    const time = new Date(order.created_at ?? order.date).getTime();
+    const isSeller = order.seller_id
+      ? String(order.seller_id) === String(userId)
+      : order.role === "seller";
+
+    if (id == null || !status || time < cutoff) continue;
+    if (isSeller ? status !== "pending" : status === "pending") continue;
+
+    const item = order.item ?? order.title ?? "your order";
+    const counterparty = order.counterparty ?? order.counterparty_name ?? "";
+
+    alerts.push({
+      id,
+      key: `order:${id}:${status}`,
+      status,
+      unread: seen[id] !== status,
+      time,
+      title: isSeller ? "New order received" : "Order update",
+      body: isSeller
+        ? `${item}${counterparty ? ` from ${counterparty}` : ""}`
+        : `${item} is now ${status}`,
+      page: "orders",
+    });
   }
-  return alerts.sort((a, b) => (b.time || 0) - (a.time || 0));
+
+  return alerts;
+}
+
+function deriveReportAlerts(reports, isAdmin, seen) {
+  return reports.map((report) => {
+    const id = `report:${report.report_id}`;
+    const status = isAdmin ? "submitted" : report.status;
+
+    return {
+      id,
+      key: `${id}:${status}`,
+      status,
+      unread: seen[id] !== status,
+      time: new Date(
+        isAdmin ? report.created_at : report.resolved_at
+      ).getTime(),
+      title: isAdmin
+        ? `New report #${report.report_id}`
+        : `Report #${report.report_id} ${status}`,
+      body: isAdmin
+        ? report.reason
+        : report.decision_reason
+          ? `Decision reason: ${report.decision_reason}`
+          : `Reported issue: ${report.reason}`,
+      page: isAdmin ? "admin-reports" : null,
+    };
+  });
 }
 
 function timeAgo(ms) {
-  if (!ms || Number.isNaN(ms)) return "";
-  const m = Math.floor((Date.now() - ms) / 60000);
-  if (m < 1) return "Just now";
-  if (m < 60) return `${m} min ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h} h ago`;
-  const d = Math.floor(h / 24);
-  return `${d} day${d > 1 ? "s" : ""} ago`;
+  if (!Number.isFinite(ms)) return "";
+
+  const minutes = Math.floor((Date.now() - ms) / 60000);
+  if (minutes < 1) return "Just now";
+  if (minutes < 60) return `${minutes} min ago`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} h ago`;
+
+  const days = Math.floor(hours / 24);
+  return `${days} day${days > 1 ? "s" : ""} ago`;
 }
 
-function useOrderAlerts(user, loadOrders) {
-  const [alerts, setAlerts] = useState([]);
-  const loadRef = useRef(loadOrders);
-  loadRef.current = loadOrders; // so an inline function from the parent can't retrigger the polling
-
+function useAlerts(user, loadOrders) {
+  const [orderAlerts, setOrderAlerts] = useState([]);
+  const [reportAlerts, setReportAlerts] = useState([]);
+  const loadOrdersRef = useRef(loadOrders);
+  const seenRef = useRef({});
   const userId = user?.user_id;
-
-  const refresh = useCallback(async () => {
-    if (!userId) return;
-    try {
-      const orders = await loadRef.current();
-      setAlerts(deriveAlerts(Array.isArray(orders) ? orders : [], { user_id: userId }, readSeen(userId)));
-    } catch {
-      // keep the last list if a request fails
-    }
-  }, [userId]);
+  const isAdmin = user?.role === "admin";
 
   useEffect(() => {
-    refresh();
-    const t = setInterval(() => {
-      if (document.visibilityState === "visible") refresh();
-    }, POLL_MS);
-    return () => clearInterval(t);
-  }, [refresh]);
+    loadOrdersRef.current = loadOrders;
+  }, [loadOrders]);
 
-  const markRead = (list) => {
+  useEffect(() => {
+    setOrderAlerts([]);
+    setReportAlerts([]);
     if (!userId) return;
-    const seen = readSeen(userId);
-    list.forEach((a) => { seen[a.id] = a.status; });
-    writeSeen(userId, seen);
-    const ids = new Set(list.map((a) => a.key));
-    setAlerts((prev) => prev.map((a) => (ids.has(a.key) ? { ...a, unread: false } : a)));
-  };
 
-  return { alerts, unreadCount: alerts.filter((a) => a.unread).length, markRead };
+    seenRef.current = readSeen(userId);
+    let cancelled = false;
+    let refreshing = false;
+
+    async function refresh() {
+      if (refreshing) return;
+      refreshing = true;
+
+      try {
+        const [ordersResult, reportsResult] = await Promise.allSettled([
+          Promise.resolve().then(() => loadOrdersRef.current()),
+          Promise.resolve().then(() => getReportNotifications()),
+        ]);
+
+        if (cancelled) return;
+
+        if (ordersResult.status === "fulfilled") {
+          const orders = Array.isArray(ordersResult.value)
+            ? ordersResult.value
+            : [];
+          setOrderAlerts(deriveOrderAlerts(orders, userId, seenRef.current));
+        }
+
+        if (reportsResult.status === "fulfilled") {
+          const reports = reportsResult.value?.reports;
+          setReportAlerts(
+            deriveReportAlerts(
+              Array.isArray(reports) ? reports : [],
+              isAdmin,
+              seenRef.current
+            )
+          );
+        }
+      } finally {
+        refreshing = false;
+      }
+    }
+
+    function refreshWhenVisible() {
+      if (document.visibilityState === "visible") refresh();
+    }
+
+    refresh();
+    const timer = setInterval(refreshWhenVisible, POLL_MS);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [userId, isAdmin]);
+
+  const alerts = [...orderAlerts, ...reportAlerts].sort(
+    (a, b) => (b.time || 0) - (a.time || 0)
+  );
+
+  function markRead(list) {
+    if (!userId) return;
+
+    const seen = { ...readSeen(userId), ...seenRef.current };
+    for (const alert of list) {
+      seen[alert.id] = alert.status;
+    }
+    seenRef.current = seen;
+    writeSeen(userId, seen);
+
+    const keys = new Set(list.map((alert) => alert.key));
+    const update = (previous) =>
+      previous.map((alert) =>
+        keys.has(alert.key) ? { ...alert, unread: false } : alert
+      );
+
+    setOrderAlerts(update);
+    setReportAlerts(update);
+  }
+
+  return {
+    alerts,
+    unreadCount: alerts.filter((alert) => alert.unread).length,
+    markRead,
+  };
 }
 
 export default function NotificationBell({ user, loadOrders, goto }) {
-  const { alerts, unreadCount, markRead } = useOrderAlerts(user, loadOrders);
+  const { alerts, unreadCount, markRead } = useAlerts(user, loadOrders);
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
   useEffect(() => {
     if (!open) return;
-    const onDown = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
+
+    function handleOutsideClick(event) {
+      if (ref.current && !ref.current.contains(event.target)) {
+        setOpen(false);
+      }
+    }
+
+    function handleKeyDown(event) {
+      if (event.key === "Escape") setOpen(false);
+    }
+
+    document.addEventListener("mousedown", handleOutsideClick);
+    document.addEventListener("keydown", handleKeyDown);
+
     return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", handleOutsideClick);
+      document.removeEventListener("keydown", handleKeyDown);
     };
   }, [open]);
 
-  const shown = alerts.slice(0, 10);
+  function selectAlert(alert) {
+    markRead([alert]);
+    if (!alert.page) return;
+
+    setOpen(false);
+    goto(alert.page);
+  }
 
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative shrink-0" ref={ref}>
       <button
         type="button"
         className="relative p-1"
         aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ""}`}
         aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => setOpen((previous) => !previous)}
         style={{ background: "transparent", border: "none", cursor: "pointer" }}
       >
         <Bell size={19} style={{ color: "var(--text-muted)" }} />
@@ -156,13 +259,16 @@ export default function NotificationBell({ user, loadOrders, goto }) {
           className="agri-card z-30 fixed left-2 right-2 top-14 sm:absolute sm:left-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-80"
           style={{ boxShadow: "0 8px 24px rgba(26, 29, 26, 0.12)" }}
         >
-          <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: "var(--border)" }}>
+          <div
+            className="flex items-center justify-between px-4 py-3 border-b"
+            style={{ borderColor: "var(--border)" }}
+          >
             <span className="font-semibold text-sm">Notifications</span>
             {unreadCount > 0 && (
               <button
                 type="button"
                 className="text-xs font-semibold underline"
-                style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--primary)" }}
+                style={{ color: "var(--primary)" }}
                 onClick={() => markRead(alerts)}
               >
                 Mark all as read
@@ -170,36 +276,49 @@ export default function NotificationBell({ user, loadOrders, goto }) {
             )}
           </div>
 
-          {shown.length === 0 ? (
-            <p className="px-4 py-6 text-sm text-center" style={{ color: "var(--text-muted)" }}>
-              No new notifications.
+          {alerts.length === 0 ? (
+            <p
+              className="px-4 py-6 text-sm text-center"
+              style={{ color: "var(--text-muted)" }}
+            >
+              No notifications yet.
             </p>
           ) : (
             <div className="overflow-y-auto" style={{ maxHeight: 360 }}>
-              {shown.map((a) => (
+              {alerts.map((alert) => (
                 <button
-                  key={a.key}
+                  key={alert.key}
                   type="button"
                   className="w-full text-left px-4 py-3 border-b flex gap-3"
                   style={{
                     borderColor: "var(--border)",
-                    background: a.unread ? "var(--primary-soft)" : "transparent",
-                    cursor: "pointer",
+                    background: alert.unread ? "var(--primary-soft)" : "transparent",
                     color: "var(--text)",
                   }}
-                  onClick={() => {
-                    markRead([a]);
-                    setOpen(false);
-                    goto("orders"); // must match a case in renderPage
-                  }}
+                  onClick={() => selectAlert(alert)}
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm font-semibold">{a.title}</div>
-                    <div className="text-xs truncate" style={{ color: "var(--text-muted)" }}>{a.body}</div>
-                    <div className="text-xs mt-0.5" style={{ color: "var(--text-faint)" }}>{timeAgo(a.time)}</div>
+                    <div className="text-sm font-semibold">{alert.title}</div>
+                    <div
+                      className={
+                        alert.page === null
+                          ? "text-xs whitespace-pre-wrap break-words"
+                          : "text-xs truncate"
+                      }
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      {alert.body}
+                    </div>
+                    <div className="text-xs mt-0.5" style={{ color: "var(--text-faint)" }}>
+                      {timeAgo(alert.time)}
+                    </div>
                   </div>
-                  {a.unread && (
-                    <span aria-hidden="true" className="w-2 h-2 rounded-full mt-1.5 shrink-0" style={{ background: "var(--primary)" }} />
+                  {alert.unread && (
+                    <span
+                      aria-hidden="true"
+                      className="w-2 h-2 rounded-full mt-1.5 shrink-0"
+                      style={{ background: "var(--primary)" }}
+                    />
                   )}
                 </button>
               ))}

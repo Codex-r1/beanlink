@@ -39,7 +39,6 @@ export const NAV_BY_ROLE = {
     { id: "admin-users",  label: "Users",         icon: Users },
     { id: "marketplace",  label: "Listings",      icon: ShoppingBag },
     { id: "admin-prices", label: "Market Prices", icon: TrendingUp },
-    { id: "transactions", label: "Transactions",  icon: Receipt },
     { id: "admin-reports", label: "Reports",      icon: Flag },
     
   ],

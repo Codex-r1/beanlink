@@ -37,6 +37,10 @@ async function googleLogin(req, res) {
       user = insertRes.rows[0];
     }
 
+    if (user.moderation_status === 'restricted') {
+      return res.status(403).json({ error: 'This account has been restricted.' });
+    }
+
     // 3. Generate OTP
     const otp = generateOTP();
     const hashedOtp = await bcrypt.hash(otp, 10);
@@ -132,6 +136,10 @@ async function login(req, res) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
+    if (user.moderation_status === 'restricted') {
+      return res.status(403).json({ error: 'This account has been restricted.' });
+    }
+
     // --- 2FA LOGIC START ---
     const otp = generateOTP();
     const hashedOtp = await bcrypt.hash(otp, 10);
@@ -183,6 +191,10 @@ async function verifyLoginOTP(req, res) {
     const validOTP = await bcrypt.compare(otp, user.login_otp);
     if (!validOTP) {
       return res.status(400).json({ error: 'Invalid OTP' });
+    }
+
+    if (user.moderation_status === 'restricted') {
+      return res.status(403).json({ error: 'This account has been restricted.' });
     }
 
     // Clear OTP from DB so it can't be reused

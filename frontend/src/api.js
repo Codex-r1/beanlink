@@ -52,7 +52,7 @@ export const getMarketplace = (params = {}) => {
   const qs = new URLSearchParams(
     Object.entries(params).filter(([, v]) => v !== undefined && v !== "" && v !== "all")
   ).toString();
-  return request(`/marketplace/listings${qs ? `?${qs}` : ""}`, { auth: false });
+  return request(`/marketplace/listings${qs ? `?${qs}` : ""}`);
 };
 export const initiateMpesaPush = (order_id, phone) =>
   request("/payments/mpesa-push", { method: "POST", body: { order_id, phone } });
@@ -104,13 +104,17 @@ export const getProfile = () => request("/profile");
 export const updateProfile = (payload) =>
   request("/profile", { method: "PATCH", body: payload });
 
-/* RECOMMENDATIONS — stub endpoint, wire the ML service when ready */
+/* RECOMMENDATIONS â€” stub endpoint, wire the ML service when ready */
 export const getRecommendation = (farmData) =>
   request("/recommendations", { method: "POST", body: farmData });
 
 /* ADMIN */
-export const adminListUsers = (role) =>
-  request(`/admin/users${role && role !== "all" ? `?role=${role}` : ""}`);
+export const adminListUsers = (role, userId) => {
+  const params = new URLSearchParams();
+  if (role && role !== "all") params.set("role", role);
+  if (userId) params.set("userId", userId);
+  return request(`/admin/users${params.size ? `?${params}` : ""}`);
+};
 export const adminVerifyUser = (id) =>
   request(`/admin/users/${id}/verify`, { method: "PATCH" });
 export const adminListPrices = () => request("/admin/prices");
@@ -171,3 +175,15 @@ export const createReview = (txnId, payload) =>
 
 export const getSellerRating = (sellerId) => 
   request(`/sellers/${sellerId}/rating`, { auth: false });
+export const submitIssueReport = (report) =>
+  request("/reports", { method: "POST", body: report });
+
+export const adminModerateUser = (id, status, reason) =>
+  request(`/admin/users/${id}/moderation`, { method: "PATCH", body: { status, reason } });
+export const getReportNotifications = () => request("/reports/notifications");
+
+export const adminResolveReport = (id, action, reason) =>
+  request(`/admin/reports/${id}`, {
+    method: "PATCH",
+    body: { action, reason },
+  });

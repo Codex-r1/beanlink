@@ -20,7 +20,7 @@ import {
   getRecommendation,getRecommendationHistory,completeOnboarding,
   adminListUsers, adminVerifyUser,
   adminListPrices, adminCreatePrice,
-  adminListReports,
+  adminListReports, submitIssueReport, adminModerateUser, adminResolveReport,
   initiateMpesaPush, getPaymentStatus,getOrder, setFulfillment, sellerAdvance, buyerConfirm,
   adminGetStats, adminBatchImportPrices
 } from "./api";
@@ -848,7 +848,8 @@ function Login({ goto, onLogin, mode, setMode }) {
 function AppShell({ role, user, page, goto, onLogout, children }) {
   const [mobileMenu, setMobileMenu] = useState(false);
   const { confirm } = useModal();
-  const nav = NAV_BY_ROLE[role] || NAV_BY_ROLE.farmer;
+  const roleNav = NAV_BY_ROLE[role] || NAV_BY_ROLE.farmer;
+  const nav = role === "admin" ? roleNav : [...roleNav, { id: "report-issue", label: "Report an issue", icon: Flag }];
   const mobilePrimary = nav.slice(0, 4);
 
   const handleLogout = async () => {
@@ -878,11 +879,6 @@ const loadOrders = async () => (await getOrders()).orders;
             </div>
           ))}
         </nav>
-        <div className="px-3 py-4 border-t" style={{ borderColor: "var(--border)" }}>
-          <div className="agri-nav-link" onClick={handleLogout}>
-            <LogOut size={17} /> Log Out
-          </div>
-        </div>
       </aside>
 
       <div className="flex-1 min-w-0 flex flex-col">
@@ -898,14 +894,20 @@ const loadOrders = async () => (await getOrders()).orders;
           
                <NotificationBell user={user} loadOrders={loadOrders} goto={goto} />
             
-          <button className="flex items-center gap-2" onClick={() => goto("profile")}>
-            <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold" style={{ background: "var(--primary-soft)", color: "var(--primary-dark)" }}>
-              {user.full_name.split(" ").map((p) => p[0]).join("").slice(0, 2)}
-            </div>
-            <span className="hidden md:block text-sm font-medium">{user.full_name}</span>
-          </button>
+          <div className="ml-auto flex min-w-0 items-center gap-90">
+            <button type="button" className="flex min-w-0 items-center gap-2" onClick={() => goto("profile")}>
+              <span className="w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-xs font-bold" style={{ background: "var(--primary-soft)", color: "var(--primary-dark)" }}>
+                {user.full_name.split(" ").map((p) => p[0]).join("").slice(0, 2)}
+              </span>
+              <span className="truncate text-sm font-medium" tile={user.full_name}>{user.full_name}</span>
+            </button>
+            <Button type="button" size="sm" variant="secondary" icon={LogOut} className="shrink-0"
+              onClick={handleLogout} aria-label="Log out" title="Log out">
+              Log Out
+            </Button>
+          </div>
         </header>
-        <main className="flex-1 p-4 md:p-7 pb-20 md:pb-7">{children}</main>
+        <main className="flex-1 p-4 md:p-f7 pb-20 md:pb-7">{children}</main>
       </div>
 
       <nav className="md:hidden fixed bottom-0 left-0 right-0 border-t flex z-20" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
@@ -935,7 +937,6 @@ const loadOrders = async () => (await getOrders()).orders;
                   <n.icon size={17} /> {n.label}
                 </div>
               ))}
-              <div className="agri-nav-link" onClick={() => { setMobileMenu(false); handleLogout(); }}><LogOut size={17} /> Log Out</div>
             </div>
           </div>
         </div>
@@ -1003,7 +1004,7 @@ const [showAllActivity, setShowAllActivity] = useState(false);
 
   return (
     <div>
-      <SectionHeading title={`Good morning, ${firstName}`} subtitle="Here is an overview of your farming and marketplace activity." />
+      <SectionHeading title={`Hello, ${firstName}`} subtitle="Here is an overview of your farming and marketplace activity." />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-7">
         <StatCard label="Active Listings" value={summary?.activeListings ?? 0} icon={Wheat} />
@@ -1849,6 +1850,7 @@ function isOwnListing(listing, user) {
 }
 
 function Marketplace({ goto, guest = false, initialSearch = "", initialCategory = "all", fromRecommendation, user }) {
+  const canPurchase = user?.role !== "admin";
   const { push } = useToast();
   const { confirm } = useModal();
   
@@ -2019,6 +2021,7 @@ const visibleListings = React.useMemo(() => {
           title="Marketplace"
           subtitle="Browse bean produce and farm inputs from farmers and suppliers."
         />
+{canPurchase && (
         <button
           onClick={() => setIsCartOpen(true)}
           className="agri-btn agri-btn-secondary relative shrink-0"
@@ -2035,6 +2038,7 @@ const visibleListings = React.useMemo(() => {
             </span>
           )}
         </button>
+        )}
       </div>
 
       {/* Category Chips */}
@@ -2191,6 +2195,7 @@ const visibleListings = React.useMemo(() => {
               >
                 View Details
               </Button>
+{canPurchase && (
               <Button
                 size="sm"
                 className="agri-btn-block"
@@ -2199,6 +2204,7 @@ const visibleListings = React.useMemo(() => {
               >
                 Add to Cart
               </Button>
+        )}
             </div>
           </div>
         );
@@ -2208,7 +2214,7 @@ const visibleListings = React.useMemo(() => {
 )}
 
       {/* Slide-out Cart Drawer Overlay */}
-      {isCartOpen && (
+      {canPurchase && isCartOpen && (
         <div className="fixed inset-0 z-50 flex justify-end" style={{ background: "rgba(15, 25, 18, 0.5)" }}>
           <div
             className="w-full max-w-md h-full flex flex-col p-5 shadow-2xl"
@@ -2306,7 +2312,7 @@ const visibleListings = React.useMemo(() => {
       )}
 
       {/* Payment Modal Triggered from Cart */}
-            {checkoutItem && (
+            {canPurchase && checkoutItem && (
         <PaymentModal
           open={paymentOpen}
           listing={checkoutItem}
@@ -2332,6 +2338,7 @@ const visibleListings = React.useMemo(() => {
 }
 
 function InputDetail({ item, goto, guest = false, user, backToMarketplace }) {
+  const canPurchase = user?.role !== "admin";
   const { push } = useToast();
   const { open, confirm } = useModal();
   const [fresh, setFresh] = useState(item);
@@ -2486,41 +2493,51 @@ function InputDetail({ item, goto, guest = false, user, backToMarketplace }) {
           </div>
         </div>
 
-        <div className="mb-4">
-          <Field label="Quantity to order">
-            <input
-              type="number"
-              min="1"
-              className="agri-input"
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
-              disabled={!available || ownListing}
-            />
-          </Field>
-        </div>
+        {canPurchase && (
+          <>
+            <div className="mb-4">
+              <Field label="Quantity to order">
+                <input
+                  type="number"
+                  min="1"
+                  className="agri-input"
+                  value={quantity}
+                  onChange={(e) => setQuantity(e.target.value)}
+                  disabled={!available || ownListing}
+                />
+              </Field>
+            </div>
 
-        <div className="flex gap-3">
-          <Button
-            variant="secondary"
-            className="agri-btn-block"
-            disabled={!available || ownListing}
-            onClick={addToCart}
-          >
-            Add to Cart
-          </Button>
-          <Button
-            className="agri-btn-block"
-            disabled={!available || ownListing}
-            onClick={placeOrder}
-          >
-            Buy Now
-          </Button>
-        </div>
+            <div className="flex gap-3">
+              <Button
+                variant="secondary"
+                className="agri-btn-block"
+                disabled={!available || ownListing}
+                onClick={addToCart}
+              >
+                Add to Cart
+              </Button>
+              <Button
+                className="agri-btn-block"
+                disabled={!available || ownListing}
+                onClick={placeOrder}
+              >
+                Buy Now
+              </Button>
+            </div>
+          </>
+        )}
       </div>
 
       {ownListing && <p className="mt-3 text-sm" role="status">This is your listing.</p>}
+      {!guest && (
+        <Button variant="secondary" icon={Flag} className="mt-4"
+          onClick={() => goto("report-issue", { listingId: fresh.listing_id, title: fresh.title || beanLabel(fresh.variety) })}>
+          Report this listing
+        </Button>
+      )}
       <PaymentModal
-        open={paymentOpen && !ownListing}
+        open={canPurchase && paymentOpen && !ownListing}
         listing={fresh}
         quantity={quantity}
         goto={goto}
@@ -2531,6 +2548,7 @@ function InputDetail({ item, goto, guest = false, user, backToMarketplace }) {
   );
 }
 function ProduceDetail({ item, goto, guest = false, user, backToMarketplace }) {
+  const canPurchase = user?.role !== "admin";
   const { push } = useToast();
   const { open, confirm } = useModal();
   const [fresh, setFresh] = useState(item);
@@ -2649,31 +2667,41 @@ function ProduceDetail({ item, goto, guest = false, user, backToMarketplace }) {
           </div>
         )}
 
-        <div className="flex gap-3">
-          <Field label="Quantity to order (kg)">
-            <input
-              className="agri-input"
-              type="number"
-              min="1"
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
-              disabled={!available || ownListing}
-            />
-          </Field>
-        </div>
+        {canPurchase && (
+          <>
+            <div className="flex gap-3">
+              <Field label="Quantity to order (kg)">
+                <input
+                  className="agri-input"
+                  type="number"
+                  min="1"
+                  value={quantity}
+                  onChange={(e) => setQuantity(e.target.value)}
+                  disabled={!available || ownListing}
+                />
+              </Field>
+            </div>
 
-        <Button
-          className="agri-btn-block mt-4"
-          disabled={!available || ownListing}
-          onClick={placeOrder}
-        >
-          Place Order
-        </Button>
+            <Button
+              className="agri-btn-block mt-4"
+              disabled={!available || ownListing}
+              onClick={placeOrder}
+            >
+              Place Order
+            </Button>
+          </>
+        )}
       </div>
 
       {ownListing && <p className="mt-3 text-sm" role="status">This is your listing.</p>}
+      {!guest && (
+        <Button variant="secondary" icon={Flag} className="mt-4"
+          onClick={() => goto("report-issue", { listingId: fresh.listing_id, title: fresh.title || beanLabel(fresh.variety) })}>
+          Report this listing
+        </Button>
+      )}
       <PaymentModal
-        open={paymentOpen && !ownListing}
+        open={canPurchase && paymentOpen && !ownListing}
         listing={fresh}
         quantity={quantity}
         goto={goto}
@@ -4348,9 +4376,10 @@ function AdminDashboard({ goto }) {
   );
 }
 
-  function AdminUsers() {
+function AdminUsers({ focusId }) {
   const { push } = useToast();
   const { confirm } = useModal();
+  const [focusedUser, setFocusedUser] = useState(focusId);
   const [filter, setFilter] = useState("all");
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -4358,14 +4387,14 @@ function AdminDashboard({ goto }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await adminListUsers(filter === "all" ? null : filter);
+      const data = await adminListUsers(filter, focusedUser);
       setRows(data.users || []);
     } catch (err) {
       push(err.message || "Failed to load users", "red");
     } finally {
       setLoading(false);
     }
-  }, [filter, push]);
+  }, [filter, focusedUser, push]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -4389,10 +4418,10 @@ function AdminDashboard({ goto }) {
 
   return (
     <div>
-      <SectionHeading title="Manage Users" subtitle="View and verify farmers, buyers, and sellers on the platform." />
+      <SectionHeading title="Manage Users" subtitle="Verify accounts, flag them for review or restrict access." />
       <div className="flex gap-2 mb-5">
         {["all", "farmer", "buyer", "supplier"].map((r) => (
-          <button key={r} onClick={() => setFilter(r)} className="agri-btn agri-btn-sm"
+          <button key={r} onClick={() => { setFilter(r); setFocusedUser(null); }} className="agri-btn agri-btn-sm"
             style={{
               background: filter === r ? "var(--primary)" : "var(--surface)",
               color: filter === r ? "#fff" : "var(--text)",
@@ -4411,20 +4440,37 @@ function AdminDashboard({ goto }) {
         <div className="agri-card">
           <div className="agri-table-wrap">
             <table className="agri-table">
-              <thead>
-                <tr><th>ID</th><th>Name</th><th>Email</th><th>Role</th><th>County</th><th>Joined</th><th></th></tr>
-              </thead>
+             <thead>
+  <tr>
+    <th>ID</th>
+    <th>Name</th>
+    <th>Email</th>
+    <th>Phone</th>
+    <th>Role</th>
+    <th>County</th>
+    <th>Joined</th>
+    <th>Actions</th>
+  </tr>
+</thead>
               <tbody>
                 {rows.map((u) => (
                   <tr key={u.user_id}>
                     <td className="mono">{String(u.user_id).slice(0, 8)}</td>
                     <td className="font-medium">{u.full_name}</td>
                     <td>{u.email}</td>
+                    <td>{u.phone_number || "—"}</td>
                     <td className="capitalize">{u.role}</td>
                     <td>{u.county || "—"}</td>
                     <td>{fmtDate(u.created_at)}</td>
                     <td>
-                      <Button size="sm" icon={ShieldCheck} onClick={() => verify(u.user_id, u.full_name)}>Verify</Button>
+                      <div className="space-y-2">
+                        <Badge tone={u.verified ? "green" : "gray"}>{u.verified ? "Verified" : "Unverified"}</Badge>
+                        {!u.verified && u.moderation_status !== "restricted" && (
+                          <Button size="sm" icon={ShieldCheck} onClick={() => verify(u.user_id, u.full_name)}>Verify</Button>
+                        )}
+                        <AccountModeration id={u.user_id} status={u.moderation_status}
+                          reason={u.moderation_reason} onSaved={load} />
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -4776,48 +4822,215 @@ function AdminMarketPrices() {
   );
 }
 
-function AdminReports() {
+function ReportIssue({ listing }) {
+  const { push } = useToast();
+  const [reason, setReason] = useState("");
+  const [details, setDetails] = useState("");
+  const [sending, setSending] = useState(false);
+  const [reportId, setReportId] = useState(null);
+
+  const submit = async (event) => {
+    event.preventDefault();
+    if (sending || !reason || !details.trim()) return;
+    setSending(true);
+    try {
+      const data = await submitIssueReport({ listingId: listing?.listingId, reason, details });
+      setReportId(data.reportId);
+    } catch (err) {
+      push(err.message || "Could not submit your report", "red");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="max-w-xl">
+      <SectionHeading title="Report an issue" subtitle={listing?.title || "Send a concern to the BeanLink administrators."} />
+      {reportId ? (
+        <div className="agri-card p-4" role="status">Report #{reportId} submitted for review.</div>
+      ) : (
+        <form className="agri-card p-4 space-y-4" onSubmit={submit}>
+          <label className="block">Reason
+            <select className="agri-select" required value={reason} onChange={(e) => setReason(e.target.value)}>
+              <option value="">Choose a reason</option>
+              <option>Misleading listing</option><option>Order or payment issue</option>
+              <option>Inappropriate behaviour</option><option>Other</option>
+            </select>
+          </label>
+          <label className="block">What happened?
+            <textarea className="agri-input w-full" required maxLength={2000} rows={5}
+              value={details} onChange={(e) => setDetails(e.target.value)} />
+          </label>
+          <Button type="submit" disabled={sending || !reason || !details.trim()}>
+            {sending ? "Sending…" : "Submit report"}
+          </Button>
+        </form>
+      )}
+    </div>
+  );
+}
+
+function AccountModeration({ id, status, reason, onSaved }) {
+  const { push } = useToast();
+  const [nextStatus, setNextStatus] = useState("");
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const save = async (event) => {
+    event.preventDefault();
+    if (saving || !nextStatus || !note.trim()) return;
+    setSaving(true);
+    try {
+      await adminModerateUser(id, nextStatus, note);
+      setNextStatus("");
+      setNote("");
+      push("Account status updated", "green");
+      onSaved();
+    } catch (err) {
+      push(err.message || "Could not update account", "red");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <form onSubmit={save} className="space-y-2 min-w-[180px]">
+      <Badge tone={status === "restricted" ? "red" : status === "flagged" ? "amber" : "green"}>
+        {status || "active"}
+      </Badge>
+      {reason && <div className="text-xs break-words">{reason}</div>}
+      <select aria-label="Account action" className="agri-select" value={nextStatus}
+        onChange={(e) => setNextStatus(e.target.value)}>
+        <option value="">Choose account action</option>
+        {status !== "flagged" && status !== "restricted" && <option value="flagged">Flag for review</option>}
+        {status !== "restricted" && <option value="restricted">Restrict access</option>}
+        {status !== "active" && <option value="active">Restore access</option>}
+      </select>
+      {nextStatus && (
+        <>
+          <input aria-label="Reason for action" placeholder="Reason for action" className="agri-input"
+            required maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} />
+          <Button size="sm" type="submit" disabled={saving || !note.trim()}>Apply action</Button>
+        </>
+      )}
+    </form>
+  );
+}
+
+function AdminReports({ goto }) {
   const { push } = useToast();
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [pending, setPending] = useState(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const data = await adminListReports();
-        if (!cancelled) setReports(data.reports || []);
-      } catch (err) {
-        push(err.message || "Failed to load reports", "red");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
+  const load = useCallback(async () => {
+    try {
+      const data = await adminListReports();
+      setReports(data.reports || []);
+    } catch (err) {
+      push(err.message || "Failed to load reports", "red");
+    } finally {
+      setLoading(false);
+    }
   }, [push]);
+
+  useEffect(() => { load(); }, [load]);
+const [dismissal, setDismissal] = useState(null);
+const [dismissalReason, setDismissalReason] = useState("");
+const finish = async (id, action, reason) => {
+  if (pending != null) return;
+  setPending(id);
+  try {
+    await adminResolveReport(id, action, reason);
+    setDismissal(null);
+    setDismissalReason("");
+    await load();
+  } catch (err) {
+    push(err.message || "Could not update report", "red");
+  } finally {
+    setPending(null);
+  }
+};
 
   if (loading) return <PageSkeleton rows={3} />;
 
   return (
-    <div>
-      <SectionHeading title="Reports" subtitle="Review listings flagged by farmers, buyers, or the platform." />
-      {reports.length === 0 ? (
-        <EmptyState icon={Flag} title="No reports" body="Nothing has been flagged yet." />
-      ) : (
-        <div className="space-y-3">
-          {reports.map((r) => (
-            <div key={r.id} className="agri-card p-4 flex items-center gap-4 flex-wrap">
-              <Flag size={17} style={{ color: "var(--red)" }} />
-              <div className="flex-1 min-w-[180px]">
-                <div className="font-semibold text-sm">{r.listing}</div>
-                <div className="text-xs" style={{ color: "var(--text-muted)" }}>{r.reason}</div>
-              </div>
-              <Badge tone={r.status === "Open" ? "amber" : "green"}>{r.status}</Badge>
-              <Button size="sm" variant="secondary" onClick={() => push("Review flow coming soon", "amber")}>Review Listing</Button>
-            </div>
-          ))}
-        </div>
-      )}
+    <div className="space-y-3">
+      <SectionHeading title="Reports" subtitle="Review concerns submitted by BeanLink users." />
+      {reports.length === 0 && <EmptyState icon={Flag} title="No reports" body="Reports will appear here for review." />}
+      {reports.map((r) => (
+        <article key={r.id} className="agri-card p-4 space-y-2">
+          <div className="flex flex-wrap justify-between gap-2">
+            <div className="font-semibold">{r.id} · {r.listing || "Platform issue"}</div>
+            <Badge tone={r.status === "Open" ? "amber" : "green"}>{r.status}</Badge>
+          </div>
+          <div className="text-sm">{r.reason} · Reported by {r.reporter || "Unknown user"}</div>
+          <p className="text-sm whitespace-pre-wrap break-words">{r.details}</p>
+          {r.subjectId && (
+            <Button size="sm" variant="secondary" onClick={() => goto("admin-users", { userId: r.subjectId })}>
+              Review account · {r.subjectName} ({r.subjectStatus})
+            </Button>
+          )}
+          {r.status === "Open" && dismissal !== r.rawId && (
+  <div className="flex flex-wrap gap-2">
+    <Button
+      type="button"
+      size="sm"
+      disabled={pending != null}
+      onClick={() => finish(r.rawId, "resolve")}
+    >
+      Resolve
+    </Button>
+
+    <Button
+      type="button"
+      size="sm"
+      variant="secondary"
+      disabled={pending != null}
+      onClick={() => {
+        setDismissal(r.rawId);
+        setDismissalReason("");
+      }}
+    >
+      Dismiss
+    </Button>
+  </div>
+)}
+          {r.status === "Open" && dismissal === r.rawId && (
+  <form
+    className="space-y-2"
+    onSubmit={(event) => {
+      event.preventDefault();
+      if (dismissalReason.trim()) {
+        finish(r.rawId, "dismiss", dismissalReason.trim());
+      }
+    }}
+  >
+    <label className="block text-sm">
+      Reason for dismissal (visible to the reporter)
+      <textarea
+        className="agri-input"
+        rows={3}
+        required
+        maxLength={500}
+        value={dismissalReason}
+        onChange={(event) => setDismissalReason(event.target.value)}
+      />
+    </label>
+    <Button type="submit" size="sm" disabled={pending != null || !dismissalReason.trim()}>
+      Confirm dismissal
+    </Button>
+    <Button type="button" size="sm" variant="secondary" onClick={() => setDismissal(null)}>
+      Cancel
+    </Button>
+  </form>
+)}
+{r.decisionReason && (
+  <p className="text-sm break-words">Decision reason: {r.decisionReason}</p>
+)}
+         
+        </article>
+      ))}
     </div>
   );
 }
@@ -5112,11 +5325,13 @@ case "marketplace":
       case "profile":
         return <Profile user={session} onUserUpdate={handleUserUpdate} />;
       case "admin-users":
-        return <AdminUsers />;
+        return <AdminUsers focusId={selectedItem?.userId} />;
       case "admin-prices":
         return <AdminMarketPrices />;
       case "admin-reports":
-        return <AdminReports />;
+        return <AdminReports goto={goto} />;
+      case "report-issue":
+        return <ReportIssue key={selectedItem?.listingId || "general"} listing={selectedItem} />;
       case "order-detail":
         return <OrderDetail orderId={selectedItem?.orderId} goto={goto} user={session} />;
       default:
